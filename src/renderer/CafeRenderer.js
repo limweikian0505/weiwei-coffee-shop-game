@@ -21,8 +21,12 @@ export class CafeRenderer {
     this.h = h;
   }
 
-  /** Redraw the entire background each frame. */
-  render(ctx) {
+  /**
+   * Redraw the entire background each frame.
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {string|null} [skyTint] - optional RGBA overlay color for dusk/closing
+   */
+  render(ctx, skyTint = null) {
     const { w, h } = this;
     const wallH    = h * 0.30; // top 30 % = wall
 
@@ -32,6 +36,14 @@ export class CafeRenderer {
     this._drawDoor(ctx, wallH);
     this._drawCounter(ctx, w, h, wallH);
     this._drawPlants(ctx, w, h, wallH);
+
+    // Time-of-day tint overlay
+    if (skyTint) {
+      ctx.save();
+      ctx.fillStyle = skyTint;
+      ctx.fillRect(0, 0, w, h);
+      ctx.restore();
+    }
   }
 
   // ─── Private draw helpers ────────────────────────────────────────────────────

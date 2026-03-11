@@ -19,6 +19,12 @@ export class OrderSystem {
 
     /** The single order currently being prepared (or null). */
     this.currentOrder = null;
+
+    /** Multiplier applied to prep time (set by coffee machine upgrades). */
+    this.prepTimeMultiplier = 1.0;
+
+    /** Optional sound callback set by Game. */
+    this.onSound = null;
   }
 
   // ─── Public API ─────────────────────────────────────────────────────────────
@@ -34,16 +40,17 @@ export class OrderSystem {
   /**
    * Start preparing a specific order (only one at a time).
    * @param {string} orderId
+   * @param {number} [prepTimeMultiplier] - optional override; defaults to this.prepTimeMultiplier
    * @returns {boolean} true if prep started successfully
    */
-  prepareOrder(orderId) {
+  prepareOrder(orderId, prepTimeMultiplier) {
     if (this.currentOrder && this.currentOrder.status === 'PREPARING') {
       return false; // machine busy
     }
     const order = this.pendingOrders.find((o) => o.id === orderId);
     if (!order || order.status !== 'PENDING') return false;
 
-    order.startPrep();
+    order.startPrep(prepTimeMultiplier ?? this.prepTimeMultiplier);
     this.currentOrder = order;
     return true;
   }
@@ -83,8 +90,10 @@ export class OrderSystem {
    */
   update(dt) {
     if (this.currentOrder && this.currentOrder.status === 'PREPARING') {
-      this.currentOrder.update(dt);
-      // If it just became READY, currentOrder stays set so we can display it
+      const justReady = this.currentOrder.update(dt);
+      if (justReady && this.onSound) {
+        this.onSound('coffee_ready');
+      }
     }
   }
 
@@ -135,4 +144,3 @@ export class OrderSystem {
     ctx.restore();
   }
 }
-

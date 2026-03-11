@@ -15,12 +15,17 @@ export class Order {
     this.item       = menuItem;          // full menu item object {id, name, price, prepTime, emoji, color}
     this.status     = 'PENDING';         // PENDING | PREPARING | READY | SERVED
     this.prepTimer  = 0;                 // counts up while preparing
+    this._effectivePrepTime = menuItem.prepTime; // may be scaled by upgrade multiplier
   }
 
-  /** Begin preparation — resets the prep timer. */
-  startPrep() {
-    this.status    = 'PREPARING';
-    this.prepTimer = 0;
+  /**
+   * Begin preparation — resets the prep timer.
+   * @param {number} prepTimeMultiplier - scale factor from coffee machine upgrades
+   */
+  startPrep(prepTimeMultiplier = 1.0) {
+    this.status             = 'PREPARING';
+    this.prepTimer          = 0;
+    this._effectivePrepTime = this.item.prepTime * prepTimeMultiplier;
   }
 
   /**
@@ -31,7 +36,7 @@ export class Order {
   update(dt) {
     if (this.status !== 'PREPARING') return false;
     this.prepTimer += dt;
-    if (this.prepTimer >= this.item.prepTime) {
+    if (this.prepTimer >= this._effectivePrepTime) {
       this.status = 'READY';
       return true; // just became ready
     }
@@ -40,8 +45,8 @@ export class Order {
 
   /** Fraction [0–1] of how far along preparation is. */
   get prepProgress() {
-    if (this.item.prepTime === 0) return 1;
-    return Math.min(this.prepTimer / this.item.prepTime, 1);
+    if (this._effectivePrepTime === 0) return 1;
+    return Math.min(this.prepTimer / this._effectivePrepTime, 1);
   }
 
   /** Mark as served to the customer. */
