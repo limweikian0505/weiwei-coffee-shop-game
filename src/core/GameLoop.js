@@ -12,6 +12,18 @@ export class GameLoop {
     this._lastTime    = null;
     this._rafHandle   = null;
     this._running     = false;
+    this._paused      = false;
+
+    // Pause the loop when the page is hidden (e.g. phone Home button pressed),
+    // and reset the clock on resume to prevent a huge dt jump.
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        this._paused = true;
+      } else {
+        this._paused    = false;
+        this._lastTime  = null; // reset so next tick gets dt = 0
+      }
+    });
   }
 
   /** Start the loop. */
@@ -36,12 +48,17 @@ export class GameLoop {
   _tick = (timestamp) => {
     if (!this._running) return;
 
-    // Calculate delta time in seconds, capped at 0.1 s
-    const dt       = Math.min((timestamp - this._lastTime) / 1000, 0.1);
-    this._lastTime = timestamp;
+    if (!this._paused) {
+      // Calculate delta time in seconds, capped at 0.1 s
+      const dt = this._lastTime === null
+        ? 0
+        : Math.min((timestamp - this._lastTime) / 1000, 0.1);
 
-    this.game.update(dt);
-    this.game.render();
+      this._lastTime = timestamp;
+
+      this.game.update(dt);
+      this.game.render();
+    }
 
     this._rafHandle = requestAnimationFrame(this._tick);
   };

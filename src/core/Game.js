@@ -18,17 +18,22 @@ import { ChatBubble }       from '../ui/ChatBubble.js';
 import { HUD }              from '../ui/HUD.js';
 import { OrderPanel }       from '../ui/OrderPanel.js';
 import { STATE }            from '../entities/Customer.js';
+import { setupOrientationHandler } from '../utils/orientation.js';
 
 class Game {
   constructor() {
     // ── Canvas setup ───────────────────────────────────────────────────────────
     this.canvas = document.getElementById('gameCanvas');
     this.ctx    = this.canvas.getContext('2d');
+    // Logical (CSS-pixel) dimensions — set by _resize()
+    this.W = window.innerWidth;
+    this.H = window.innerHeight;
     this._resize();
-    window.addEventListener('resize', () => this._resize());
+    // Orientation/resize handled via utility (replaces the inline resize listener)
+    setupOrientationHandler(this.canvas, this);
 
-    const W = this.canvas.width;
-    const H = this.canvas.height;
+    const W = this.W;
+    const H = this.H;
 
     // ── Tables ─────────────────────────────────────────────────────────────────
     this.tables = [
@@ -55,11 +60,28 @@ class Game {
     this.orderPanel = new OrderPanel();
 
     // ── Input ──────────────────────────────────────────────────────────────────
-    this.canvas.addEventListener('click',      (e) => this._onClick(e));
+    this.canvas.addEventListener('click', (e) => this._onClick(e));
+
+    // Track touch start position to distinguish taps from swipes
+    let _touchStartX = 0;
+    let _touchStartY = 0;
+
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const t = e.changedTouches[0];
-      this._onClick({ clientX: t.clientX, clientY: t.clientY });
+      _touchStartX = t.clientX;
+      _touchStartY = t.clientY;
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      // Only fire a click if the finger didn't move more than 10px (not a swipe)
+      const dx = t.clientX - _touchStartX;
+      const dy = t.clientY - _touchStartY;
+      if (Math.hypot(dx, dy) < 10) {
+        this._onClick({ clientX: t.clientX, clientY: t.clientY });
+      }
     }, { passive: false });
 
     // ── Game loop ──────────────────────────────────────────────────────────────
@@ -86,9 +108,9 @@ class Game {
   }
 
   render() {
-    const { ctx, canvas } = this;
-    const W = canvas.width;
-    const H = canvas.height;
+    const { ctx } = this;
+    const W = this.W;
+    const H = this.H;
 
     // Clear
     ctx.clearRect(0, 0, W, H);
@@ -103,8 +125,8 @@ class Game {
 
     // Customers + chat bubbles
     for (const customer of this.customerSystem.customers) {
-      this.customerRenderer.render(ctx, customer);
-      this.chatBubble.render(ctx, customer);
+      this.customerRenderer.render(ctx, customer, W);
+      this.chatBubble.render(ctx, customer, W);
     }
 
     // Order prep progress bar
@@ -125,10 +147,19 @@ class Game {
 
   // ─── Input ───────────────────────────────────────────────────────────────────
 
-  _onClick(e) {
+  /** Extract CSS-pixel coordinates from a mouse or synthetic touch event. */
+  _getEventCoords(e) {
     const rect = this.canvas.getBoundingClientRect();
-    const mx   = e.clientX - rect.left;
-    const my   = e.clientY - rect.top;
+    // getBoundingClientRect() and clientX/Y are both in CSS pixels,
+    // so a simple subtraction gives the correct canvas-space position.
+    return {
+      mx: e.clientX - rect.left,
+      my: e.clientY - rect.top,
+    };
+  }
+
+  _onClick(e) {
+    const { mx, my } = this._getEventCoords(e);
 
     // If order panel is open, handle its clicks first
     if (this.orderPanel.visible) {
@@ -151,11 +182,14 @@ class Game {
       return; // consume click
     }
 
+    // Touch-friendly hit radius: at least 44px (iOS HIG) or ~6% of canvas width
+    const touchRadius = Math.max(44, this.W * 0.06);
+
     // Check if a WAITING customer was clicked
     for (const customer of this.customerSystem.customers) {
       if (customer.state === STATE.WAITING && customer.order) {
         const dist = Math.hypot(mx - customer.x, my - customer.y);
-        if (dist < 30) {
+        if (dist < touchRadius) {
           this.orderPanel.open(customer);
           return;
         }
@@ -166,22 +200,50 @@ class Game {
   // ─── Private helpers ─────────────────────────────────────────────────────────
 
   _resize() {
-    this.canvas.width  = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+    const dpr  = window.devicePixelRatio || 1;
+    const cssW = window.innerWidth;
+    const cssH = window.innerHeight;
+
+    // Set canvas physical pixel size for sharp rendering on Retina screens
+    this.canvas.width  = cssW * dpr;
+    this.canvas.height = cssH * dpr;
+
+    // Keep CSS display size unchanged
+    this.canvas.style.width  = cssW + 'px';
+    this.canvas.style.height = cssH + 'px';
+
+    // Scale the drawing context so all coordinates remain in CSS pixels
+    // Reset transform first (defensive; canvas.width assignment already resets it)
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.scale(dpr, dpr);
+
+    // Store logical (CSS-pixel) dimensions used throughout game logic
+    this.W = cssW;
+    this.H = cssH;
+
     // Update renderer dimensions
     if (this.cafeRenderer) {
-      this.cafeRenderer.w = this.canvas.width;
-      this.cafeRenderer.h = this.canvas.height;
+      this.cafeRenderer.w = cssW;
+      this.cafeRenderer.h = cssH;
     }
     // Update customer system canvas width so exit targets stay off-screen
     if (this.customerSystem) {
-      this.customerSystem.canvasW = this.canvas.width;
+      this.customerSystem.canvasW = cssW;
+      this.customerSystem.canvasH = cssH;
+    }
+    // Reposition tables so they follow the new layout on orientation change
+    if (this.tables && this.tables.length >= 2) {
+      this.tables[0].x = cssW * 0.28;
+      this.tables[0].y = cssH * 0.52;
+      this.tables[1].x = cssW * 0.52;
+      this.tables[1].y = cssH * 0.60;
     }
   }
 
   _drawTitle(ctx, W) {
     ctx.save();
-    ctx.font      = "bold 26px 'Comic Sans MS', 'Chalkboard SE', cursive";
+    const fontSize = Math.max(18, W * 0.05);
+    ctx.font      = `bold ${fontSize}px 'Comic Sans MS', 'Chalkboard SE', cursive`;
     ctx.textAlign = 'center';
     // Shadow
     ctx.fillStyle = 'rgba(90,40,0,0.4)';
