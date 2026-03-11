@@ -331,13 +331,21 @@ class Game {
       ? (stats.totalStars / stats.customersServed).toFixed(1)
       : '0.0';
 
+    // Finalize the 'no_angry' goal at end of day (can't be done mid-day)
+    const goals = this.goalSystem.getDailyGoals();
+    const noAngryGoal = goals.find((g) => g.id === 'no_angry');
+    if (noAngryGoal) {
+      const hasServed = stats.customersServed > 0;
+      noAngryGoal.completed = hasServed && stats.angryLeaves === 0;
+    }
+
     this.daySummary.show({
       dayNumber       : this.daySystem.dayNumber,
       moneyEarned     : stats.moneyEarned,
       customersServed : stats.customersServed,
       avgRating       : avg,
       reputationDelta : repDelta,
-      goals           : this.goalSystem.getDailyGoals(),
+      goals,
     });
   }
 

@@ -60,10 +60,11 @@ export class Table {
    * - Completely empty tables are available to any group.
    * - Partially occupied tables are only available to the same group.
    * @param {string|null} groupId
+   * @param {number} [needed=1] - number of free seats required (for group spawning)
    */
-  isAvailableForGroup(groupId) {
-    const hasFreeSeat = this.seats.some((s) => !s.occupied);
-    if (!hasFreeSeat) return false;
+  isAvailableForGroup(groupId, needed = 1) {
+    const freeSeats = this.seats.filter((s) => !s.occupied).length;
+    if (freeSeats < needed) return false;
     // Fully empty — anyone can sit
     if (this.groupId === null) return true;
     // Partially occupied — only the same group

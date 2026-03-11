@@ -4,11 +4,12 @@
  *
  * Spawn rules:
  *  - New customer every 8–12 seconds (random), scaled by spawnRateMultiplier
- *  - 10 % chance the customer is a TikTok streamer
- *  - 5 % chance the customer is a special customer (VIP / critic / birthday etc.)
- *  - Otherwise: normal customer with random name + pastel color
+ *  - 75% single, 20% 2-person group, 5% 3-person group
+ *  - 10% chance of a TikTok streamer (always single)
+ *  - 5% chance of a special customer
+ *  - Groups share a groupId and sit at the same table
  *  - Max 8 customers on screen at once
- *  - If no table is available, customer never enters
+ *  - If no table has enough room for the group, no one enters
  *  - spawnEnabled = false prevents new spawns (e.g. CLOSING phase)
  */
 
@@ -16,6 +17,7 @@ import { Customer, STATE } from '../entities/Customer.js';
 import {
   STREAMERS, SPECIAL_CUSTOMERS,
   NORMAL_NAMES, PASTEL_COLORS,
+  MENU_ITEMS, getActiveMenuItems,
 } from '../data/MenuData.js';
 
 export class CustomerSystem {
@@ -45,6 +47,9 @@ export class CustomerSystem {
     /** Tip multiplier from reputation system. */
     this.tipMultiplier = 1.0;
 
+    /** Current reputation value (read from reputationSystem each frame). */
+    this.currentReputation = 50;
+
     /** Sound effect callback set by Game. */
     this.onSound = null;
 
@@ -66,6 +71,11 @@ export class CustomerSystem {
    * @param {Object} systems - { orderSystem, economySystem, reputationSystem, goalSystem }
    */
   update(dt, systems) {
+    // Sync reputation for spawn condition checks
+    if (systems.reputationSystem) {
+      this.currentReputation = systems.reputationSystem.reputation;
+    }
+
     // Update each existing customer
     for (const c of this.customers) {
       c.update(dt, systems);
@@ -88,84 +98,132 @@ export class CustomerSystem {
 
   // ─── Private ────────────────────────────────────────────────────────────────
 
-  _trySpawn() {
-    if (this.customers.length >= 8) return; // max customers on screen
+  /**
+   * Decide group size: 75% single, 20% pair, 5% triple.
+   */
+  _rollGroupSize() {
+    const r = Math.random();
+    if (r < 0.75) return 1;
+    if (r < 0.95) return 2;
+    return 3;
+  }
 
-    // Each customer arrives alone — assign a unique group ID
+  _trySpawn() {
+    if (this.customers.length >= 8) return;
+
+    // Decide if this is a streamer or special customer (always single)
+    const typeRoll = Math.random();
+    const isStreamer = typeRoll < 0.10;
+    const isSpecial  = !isStreamer && typeRoll < 0.15;
+
+    // Determine group size (streamers and special customers always come alone)
+    const groupSize = (isStreamer || isSpecial) ? 1 : this._rollGroupSize();
+
+    // Don't overflow screen
+    if (this.customers.length + groupSize > 8) return;
+
     const groupId = `group_${++this._groupSeq}`;
 
-    // Find an available table + seat (must be empty or same group)
-    const table = this.tables.find((t) => t.isAvailableForGroup(groupId));
-    if (!table) return; // no room — customer doesn't enter
+    // Find a table with enough free seats for the whole group
+    const table = this.tables.find((t) => t.isAvailableForGroup(groupId, groupSize));
+    if (!table) return; // no room
 
-    const seatIdx = table.getSeat();
+    // Build group members
+    const newCustomers = [];
 
-    // Decide customer type
-    const roll = Math.random();
-    let customer;
+    for (let i = 0; i < groupSize; i++) {
+      const seatIdx = table.getSeat();
+      if (seatIdx < 0) break; // shouldn't happen but guard
 
-    if (roll < 0.10) {
-      // Streamer
-      const data = STREAMERS[Math.floor(Math.random() * STREAMERS.length)];
-      customer = this._makeCustomer({
-        name       : data.name,
-        color      : data.color,
-        emoji      : '📱',
-        isStreamer : true,
-        tip        : data.tip,
-        quotes     : [...data.quotes],
-        platform   : data.platform,
-        groupId,
-      });
-      customer.sparkleTimer = 5; // golden sparkle on entry
-      if (this.onStreamerSpawn) this.onStreamerSpawn(customer);
+      let customer;
+      if (isStreamer) {
+        const data = STREAMERS[Math.floor(Math.random() * STREAMERS.length)];
+        customer = this._makeCustomer({
+          name       : data.name,
+          color      : data.color,
+          emoji      : '📱',
+          isStreamer : true,
+          tip        : data.tip,
+          quotes     : [...data.quotes],
+          platform   : data.platform,
+          groupId,
+        });
+        customer.sparkleTimer = 5;
+        if (this.onStreamerSpawn) this.onStreamerSpawn(customer);
 
-    } else if (roll < 0.15) {
-      // Special customer
-      const data = SPECIAL_CUSTOMERS[Math.floor(Math.random() * SPECIAL_CUSTOMERS.length)];
-      const emoji = data.id === 'vip' ? '👑'
-                  : data.id === 'birthday' ? '🎂'
-                  : data.id === 'blogger' ? '📸'
-                  : data.id === 'family' ? '👨‍👧'
-                  : '🧐';
-      customer = this._makeCustomer({
-        name         : data.name,
-        color        : data.color,
-        emoji,
-        isSpecial    : true,
-        tip          : data.tip ?? 0,
-        quotes       : data.quotes ? [...data.quotes] : [],
-        isBirthday   : data.isBirthday   ?? false,
-        isBlogger    : data.isBlogger    ?? false,
-        isFamily     : data.isFamily     ?? false,
-        angryPenalty : data.angryPenalty ?? 0,
-        requiresItem : data.requiresItem ?? null,
-        groupId,
-      });
+      } else if (isSpecial) {
+        const eligible = this._getEligibleSpecials();
+        if (!eligible.length) {
+          // Fall back to normal customer
+          const name  = NORMAL_NAMES[Math.floor(Math.random() * NORMAL_NAMES.length)];
+          const color = PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)];
+          customer = this._makeCustomer({ name, color, emoji: '😊', groupId });
+        } else {
+          const data  = eligible[Math.floor(Math.random() * eligible.length)];
+          const emoji = data.id === 'vip'      ? '👑'
+                      : data.id === 'birthday' ? '🎂'
+                      : data.id === 'blogger'  ? '📸'
+                      : data.id === 'family'   ? '👨‍👧'
+                      : '🧐';
+          customer = this._makeCustomer({
+            name         : data.name,
+            color        : data.color,
+            emoji,
+            isSpecial    : true,
+            tip          : data.tip ?? 0,
+            quotes       : data.quotes ? [...data.quotes] : [],
+            isBirthday   : data.isBirthday   ?? false,
+            isBlogger    : data.isBlogger    ?? false,
+            isFamily     : data.isFamily     ?? false,
+            angryPenalty : data.angryPenalty ?? 0,
+            requiresItem : data.requiresItem ?? null,
+            groupId,
+          });
+        }
+      } else {
+        // Normal customer
+        const name  = NORMAL_NAMES[Math.floor(Math.random() * NORMAL_NAMES.length)];
+        const color = PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)];
+        customer = this._makeCustomer({ name, color, emoji: '😊', groupId });
+      }
 
-    } else {
-      // Normal customer
-      const name  = NORMAL_NAMES[Math.floor(Math.random() * NORMAL_NAMES.length)];
-      const color = PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)];
-      customer = this._makeCustomer({ name, color, emoji: '😊', groupId });
+      // Spawn position: left edge, Y staggered by 30px for group members
+      const floorTop    = this.canvasH * 0.30;
+      const floorBottom = this.canvasH - 100;
+      const baseY       = floorTop + Math.random() * (floorBottom - floorTop);
+      customer.x       = -30;
+      customer.y       = baseY + i * 30;
+      customer.targetX  = table.x - 60;
+      customer.targetY  = table.y;
+
+      table.occupy(seatIdx, customer);
+      customer.assignedTable = table;
+      customer.assignedSeat  = seatIdx;
+
+      newCustomers.push(customer);
     }
 
-    // Spawn position: left edge, random Y in the cafe floor area
-    const floorTop    = this.canvasH * 0.30;
-    const floorBottom = this.canvasH - 100;
-    customer.x       = -30;
-    customer.y       = floorTop + Math.random() * (floorBottom - floorTop);
+    // Play door chime once for the group
+    if (newCustomers.length > 0 && this.onSound) {
+      this.onSound('door_chime');
+    }
 
-    // Walk to just in front of the table as the WALKING_IN destination
-    customer.targetX  = table.x - 60;
-    customer.targetY  = table.y;
+    this.customers.push(...newCustomers);
+  }
 
-    // Reserve the seat immediately so nobody else takes it
-    table.occupy(seatIdx, customer);
-    customer.assignedTable = table;
-    customer.assignedSeat  = seatIdx;
+  /**
+   * Returns special customer types that are eligible to spawn given current conditions.
+   */
+  _getEligibleSpecials() {
+    const rep = this.currentReputation;
+    const cakeUnlocked = MENU_ITEMS.find((m) => m.id === 'cake')?.unlocked ?? false;
 
-    this.customers.push(customer);
+    return SPECIAL_CUSTOMERS.filter((data) => {
+      if (data.isBirthday && !cakeUnlocked) return false;
+      if (data.isBlogger  && rep <= 60)     return false;
+      if (data.isFamily   && rep <= 50)     return false;
+      return true;
+    });
   }
 
   /** Build a Customer with system-level defaults applied. */

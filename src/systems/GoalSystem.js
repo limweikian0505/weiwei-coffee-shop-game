@@ -97,6 +97,8 @@ export class GoalSystem {
 
   _checkGoals() {
     for (const goal of this.goals) {
+      // 'no_angry' is finalized only at end of day in Game._showDaySummary
+      if (goal.id === 'no_angry') continue;
       if (!this._completedGoals.has(goal.id) && goal.check(this.stats)) {
         this._completedGoals.add(goal.id);
         goal.completed = true;
