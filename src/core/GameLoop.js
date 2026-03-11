@@ -48,17 +48,22 @@ export class GameLoop {
   _tick = (timestamp) => {
     if (!this._running) return;
 
-    if (!this._paused) {
-      // Calculate delta time in seconds, capped at 0.1 s
-      const dt = this._lastTime === null
-        ? 0
-        : Math.min((timestamp - this._lastTime) / 1000, 0.1);
-
-      this._lastTime = timestamp;
-
-      this.game.update(dt);
-      this.game.render();
+    if (this._paused) {
+      this._rafHandle = requestAnimationFrame(this._tick);
+      return;
     }
+
+    if (this._lastTime === null) {
+      this._lastTime = timestamp;
+      this._rafHandle = requestAnimationFrame(this._tick);
+      return;
+    }
+
+    const dt = Math.min((timestamp - this._lastTime) / 1000, 0.1);
+    this._lastTime = timestamp;
+
+    this.game.update(dt);
+    this.game.render();
 
     this._rafHandle = requestAnimationFrame(this._tick);
   };

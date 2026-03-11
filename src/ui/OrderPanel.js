@@ -71,9 +71,9 @@ export class OrderPanel {
 
     // Adaptive panel width: 85% of canvas up to 340px
     const pw = Math.min(canvasWidth * 0.85, 340);
-    const ph = 240;
+    const ph = Math.min(canvasHeight * 0.45, 260);
     const px = (canvasWidth  - pw) / 2;
-    const py = (canvasHeight - ph) / 2 - 30;
+    const py = (canvasHeight - ph) / 2 - 20;
 
     this._panelRect = { x: px, y: py, w: pw, h: ph };
 
