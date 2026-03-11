@@ -21,7 +21,7 @@ export class TableRenderer {
    */
   render(ctx, table, canvasH = 640) {
     const sx = table.x;
-    const sy = table.y * 0.55 + canvasH * 0.22;
+    const sy = table.y;
 
     switch (table.type) {
       case 'round2':
@@ -41,16 +41,16 @@ export class TableRenderer {
   // ─── round2 ──────────────────────────────────────────────────────────────────
 
   _drawRound2(ctx, table, sx, sy, canvasH) {
-    const r    = Math.max(22, canvasH * 0.038);    // table top radius
-    const legH = r * 0.55;                          // leg height
-    const sideH = r * 0.28;                         // cylinder side depth
+    const r    = Math.max(16, canvasH * 0.04);   // table top radius
+    const legH = r * 0.55;                        // leg height
+    const sideH = r * 0.28;                       // cylinder side depth
 
     ctx.save();
 
     // ── Chairs (draw before table so table is on top) ──────────────────────────
     for (const seat of table.seats) {
-      const cx = sx + seat.ox * 0.82;
-      const cy = sy + seat.oy * 0.42;
+      const cx = sx + seat.ox;
+      const cy = sy + seat.oy;
       this._drawChairCushion(ctx, cx, cy, seat.occupied, r * 0.48, sideH * 0.7);
     }
 
@@ -127,25 +127,19 @@ export class TableRenderer {
   // ─── square4 ─────────────────────────────────────────────────────────────────
 
   _drawSquare4(ctx, table, sx, sy, canvasH) {
-    const hw   = Math.max(26, canvasH * 0.042);  // half width
-    const hd   = hw * 0.42;                       // half depth (isometric squish)
+    const hw   = Math.max(20, canvasH * 0.05);  // half width
+    const hd   = hw * 0.42;                      // half depth (isometric squish)
     const legH = hw * 0.50;
-    const topH = hd * 0.35;                       // thickness of table top
+    const topH = hd * 0.35;                      // thickness of table top
 
     ctx.save();
 
-    // ── Chairs at N/S/E/W ─────────────────────────────────────────────────────
-    const chairDefs = [
-      { ox: 0,    oy: -hw * 1.45 },  // North
-      { ox: 0,    oy:  hw * 1.45 },  // South
-      { ox: -hw * 1.45, oy: 0   },  // West
-      { ox:  hw * 1.45, oy: 0   },  // East
-    ];
-    for (let i = 0; i < chairDefs.length; i++) {
-      const occ = i < table.seats.length && table.seats[i].occupied;
-      const cx  = sx + chairDefs[i].ox * 0.82;
-      const cy  = sy + chairDefs[i].oy * 0.42;
-      this._drawIsoChair(ctx, cx, cy, occ, hw * 0.42, hd * 0.5);
+    // ── Chairs drawn at seat positions from table.seats ────────────────────────
+    for (let i = 0; i < table.seats.length; i++) {
+      const seat = table.seats[i];
+      const cx   = sx + seat.ox;
+      const cy   = sy + seat.oy;
+      this._drawIsoChair(ctx, cx, cy, seat.occupied, hw * 0.42, hd * 0.5);
     }
 
     // ── Legs ──────────────────────────────────────────────────────────────────

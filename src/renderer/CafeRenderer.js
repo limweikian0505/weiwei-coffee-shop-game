@@ -51,8 +51,7 @@ export class CafeRenderer {
     this._drawSky(ctx, W, H, originY);
 
     // ── B. Flat rectangular back walls ────────────────────────────────────────
-    this._drawLeftWall(ctx, W, H, originX, originY, wallH);
-    this._drawRightWall(ctx, W, H, originX, originY, wallH);
+    this._drawBackWall(ctx, W, H, originX, originY, wallH);
 
     // ── C. Orange isometric tile floor ────────────────────────────────────────
     this._drawFloor(ctx, originX, originY, tileW, tileH);
@@ -94,34 +93,32 @@ export class CafeRenderer {
     ctx.restore();
   }
 
-  // ─── B. Back walls ──────────────────────────────────────────────────────────
+  // ─── B. Back wall ───────────────────────────────────────────────────────────
 
-  _drawLeftWall(ctx, W, H, originX, originY, wallH) {
+  _drawBackWall(ctx, W, H, originX, originY, wallH) {
     ctx.save();
 
     const wallTop = originY - wallH;
 
+    // Single full-width fill — avoids any colour seam at the centre column
     ctx.fillStyle = '#EDD5B0';
-    ctx.fillRect(0, wallTop, originX, wallH);
+    ctx.fillRect(0, wallTop, W, wallH);
 
+    // Top border line
     ctx.strokeStyle = '#B89060';
     ctx.lineWidth   = 1;
-    ctx.strokeRect(0, wallTop, originX, wallH);
+    ctx.beginPath();
+    ctx.moveTo(0, wallTop);
+    ctx.lineTo(W, wallTop);
+    ctx.stroke();
 
-    ctx.restore();
-  }
-
-  _drawRightWall(ctx, W, H, originX, originY, wallH) {
-    ctx.save();
-
-    const wallTop = originY - wallH;
-
-    ctx.fillStyle = '#DCC89A';
-    ctx.fillRect(originX, wallTop, W - originX, wallH);
-
-    ctx.strokeStyle = '#A88040';
+    // Subtle centre corner line (very faint, no full box stroke)
+    ctx.strokeStyle = 'rgba(184,144,96,0.25)';
     ctx.lineWidth   = 1;
-    ctx.strokeRect(originX, wallTop, W - originX, wallH);
+    ctx.beginPath();
+    ctx.moveTo(originX, wallTop);
+    ctx.lineTo(originX, originY);
+    ctx.stroke();
 
     ctx.restore();
   }

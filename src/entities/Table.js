@@ -32,10 +32,10 @@ export class Table {
 
     switch (type) {
       case 'round2':
-        return makeSeats([[-30, 0], [30, 0]]);
+        return makeSeats([[-35, 20], [35, 20]]);
 
       case 'square4':
-        return makeSeats([[-25, -25], [25, -25], [-25, 25], [25, 25]]);
+        return makeSeats([[-40, -15], [40, -15], [-40, 20], [40, 20]]);
 
       case 'long6':
         return makeSeats([
