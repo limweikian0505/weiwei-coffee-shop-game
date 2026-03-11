@@ -21,10 +21,12 @@ export class CustomerSystem {
   /**
    * @param {Table[]}  tables  - Array of Table instances
    * @param {number}   canvasH - Canvas height (for spawn Y range)
+   * @param {number}   canvasW - Canvas width (for exit target calculation)
    */
-  constructor(tables, canvasH) {
+  constructor(tables, canvasH, canvasW = 1280) {
     this.tables       = tables;
     this.canvasH      = canvasH;
+    this.canvasW      = canvasW;
     this.customers    = [];
     this._spawnTimer  = 4; // first customer arrives after 4 s
     this._spawnDelay  = 8 + Math.random() * 4;
@@ -82,13 +84,14 @@ export class CustomerSystem {
       // Streamer
       const data = STREAMERS[Math.floor(Math.random() * STREAMERS.length)];
       customer = new Customer({
-        name      : data.name,
-        color     : data.color,
-        emoji     : '📱',
-        isStreamer : true,
-        tip       : data.tip,
-        quotes    : [...data.quotes],
-        platform  : data.platform,
+        name        : data.name,
+        color       : data.color,
+        emoji       : '📱',
+        isStreamer  : true,
+        tip         : data.tip,
+        quotes      : [...data.quotes],
+        platform    : data.platform,
+        canvasWidth : this.canvasW,
       });
       customer.sparkleTimer = 5; // golden sparkle on entry
       if (this.onStreamerSpawn) this.onStreamerSpawn(customer);
@@ -96,18 +99,19 @@ export class CustomerSystem {
       // Special customer
       const data = SPECIAL_CUSTOMERS[Math.floor(Math.random() * SPECIAL_CUSTOMERS.length)];
       customer = new Customer({
-        name      : data.name,
-        color     : data.color,
-        emoji     : data.id === 'vip' ? '👑' : '🧐',
-        isSpecial : true,
-        tip       : data.tip,
-        quotes    : [...data.quotes],
+        name        : data.name,
+        color       : data.color,
+        emoji       : data.id === 'vip' ? '👑' : '🧐',
+        isSpecial   : true,
+        tip         : data.tip,
+        quotes      : [...data.quotes],
+        canvasWidth : this.canvasW,
       });
     } else {
       // Normal customer
       const name  = NORMAL_NAMES[Math.floor(Math.random() * NORMAL_NAMES.length)];
       const color = PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)];
-      customer = new Customer({ name, color, emoji: '😊' });
+      customer = new Customer({ name, color, emoji: '😊', canvasWidth: this.canvasW });
     }
 
     // Spawn position: left edge, random Y in the cafe floor area

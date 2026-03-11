@@ -39,7 +39,7 @@ class Game {
     // ── Systems ────────────────────────────────────────────────────────────────
     this.economySystem  = new EconomySystem();
     this.orderSystem    = new OrderSystem();
-    this.customerSystem = new CustomerSystem(this.tables, H);
+    this.customerSystem = new CustomerSystem(this.tables, H, W);
 
     // Wire streamer banner callback
     this.customerSystem.onStreamerSpawn = (c) => this.hud.showStreamerBanner(c.name);
@@ -172,6 +172,10 @@ class Game {
     if (this.cafeRenderer) {
       this.cafeRenderer.w = this.canvas.width;
       this.cafeRenderer.h = this.canvas.height;
+    }
+    // Update customer system canvas width so exit targets stay off-screen
+    if (this.customerSystem) {
+      this.customerSystem.canvasW = this.canvas.width;
     }
   }
 

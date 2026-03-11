@@ -57,6 +57,9 @@ export class Customer {
     this.targetY     = 300;
     this.walkSpeed   = 120; // pixels per second
 
+    /** Canvas width — used to calculate the off-screen exit point. Set by CustomerSystem. */
+    this.canvasWidth = options.canvasWidth ?? 1280;
+
     // State machine
     this.state       = STATE.WALKING_IN;
     this.stateTimer  = 0; // counts DOWN in seconds
@@ -264,7 +267,7 @@ export class Customer {
 
   /** Set target to the right exit edge so the customer walks out. */
   _startLeaving() {
-    this.targetX = window.innerWidth + 40;
+    this.targetX = this.canvasWidth + 40;
     this.targetY = this.y;
     this._enterState(STATE.LEAVING, 0);
     this.say('拜拜！👋', 2);
