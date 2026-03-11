@@ -63,22 +63,28 @@ export class DaySystem {
   }
 
   render(ctx, W, H) {
+    if (this.phase === 'SUMMARY') return;
+
     ctx.save();
-    ctx.font = "bold 13px 'Comic Sans MS', cursive";
-    ctx.fillStyle = '#FFD700';
-    ctx.textAlign = 'left';
 
-    const timeLeft = Math.ceil(this.getTimeLeft());
-    const mins = Math.floor(timeLeft / 60);
-    const secs = timeLeft % 60;
-    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+    const isLandscape = W > H;
+    const fontSize    = Math.max(11, (isLandscape ? H : W) * 0.032);
+    const timeLeft    = Math.ceil(this.getTimeLeft());
+    const mm  = String(Math.floor(timeLeft / 60)).padStart(2, '0');
+    const ss  = String(timeLeft % 60).padStart(2, '0');
 
-    let phaseEmoji = '☀️';
-    if (this.phase === 'DUSK')    phaseEmoji = '🌅';
-    if (this.phase === 'CLOSING') phaseEmoji = '🌙';
-    if (this.phase === 'SUMMARY') phaseEmoji = '🌙';
+    const label = this.phase === 'CLOSING' ? '🔔 打烊中…' : `⏰ 第 ${this.dayNumber} 天  ${mm}:${ss}`;
+    const color = this.phase === 'CLOSING' ? '#EF5350' : '#FFF';
 
-    ctx.fillText(`第${this.dayNumber}天 ${phaseEmoji} ${timeStr}`, 14, H - 58);
+    // In landscape: place timer top-center with small size
+    const ty = isLandscape ? Math.max(18, H * 0.08) : 90;
+    ctx.font      = `bold ${fontSize}px 'Comic Sans MS', cursive`;
+    ctx.fillStyle = 'rgba(0,0,0,0.45)';
+    ctx.textAlign = 'center';
+    ctx.fillText(label, W / 2 + 1, ty + 1);
+    ctx.fillStyle = color;
+    ctx.fillText(label, W / 2, ty);
+
     ctx.restore();
   }
 }

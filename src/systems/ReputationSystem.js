@@ -39,26 +39,24 @@ export class ReputationSystem {
   }
 
   render(ctx, W, H) {
-    const barW = 100;
+    const hudH = Math.max(50, H * 0.10);
+    const barW = Math.min(110, W * 0.13);
     const barH = 10;
-    const x = W - barW - 14;
-    const y = H - 76; // just above HUD
+    const x = 14;                   // left side in landscape
+    const y = H - hudH - 22;        // just above HUD
     const ratio = this.reputation / this.maxReputation;
 
     ctx.save();
 
-    // Label
-    ctx.font = "bold 11px 'Comic Sans MS', cursive";
+    ctx.font = `bold ${Math.max(10, W * 0.014)}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD700';
     ctx.textAlign = 'left';
     ctx.fillText(`⭐ 声望`, x, y - 2);
 
-    // Background track
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     _roundRect(ctx, x, y, barW, barH, 4);
     ctx.fill();
 
-    // Fill
     const tierColors = { low: '#EF5350', normal: '#FFA726', high: '#66BB6A', famous: '#FFD700' };
     ctx.fillStyle = tierColors[this.getTier()];
     if (ratio > 0) {
@@ -66,8 +64,7 @@ export class ReputationSystem {
       ctx.fill();
     }
 
-    // Value text
-    ctx.font = "10px 'Comic Sans MS', cursive";
+    ctx.font = `${Math.max(9, W * 0.011)}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
     ctx.fillText(`${Math.round(this.reputation)}/100`, x + barW / 2, y + barH - 1);

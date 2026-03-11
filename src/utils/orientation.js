@@ -8,12 +8,18 @@
 export function setupOrientationHandler(canvas, game) {
   let _orientationTimer = null;
 
+  // Try to lock to landscape
+  if (screen.orientation && screen.orientation.lock) {
+    screen.orientation.lock('landscape').catch(() => {
+      // Not supported or not in fullscreen — silently ignore
+    });
+  }
+
   const onResize = () => {
     game._resize();
   };
 
   const onOrientationChange = () => {
-    // iOS fires orientationchange before the layout settles; wait 300 ms
     clearTimeout(_orientationTimer);
     _orientationTimer = setTimeout(() => {
       game._resize();

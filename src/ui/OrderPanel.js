@@ -69,9 +69,10 @@ export class OrderPanel {
     const order = customer.order;
     if (!order) return;
 
-    // Adaptive panel width: 85% of canvas up to 340px
-    const pw = Math.min(canvasWidth * 0.85, 340);
-    const ph = Math.min(canvasHeight * 0.45, 260);
+    // Adaptive panel width: wider in landscape
+    const isLandscape = canvasWidth > canvasHeight;
+    const pw = isLandscape ? Math.min(canvasWidth * 0.55, 440) : Math.min(canvasWidth * 0.85, 340);
+    const ph = isLandscape ? Math.min(canvasHeight * 0.80, 260) : Math.min(canvasHeight * 0.45, 260);
     const px = (canvasWidth  - pw) / 2;
     const py = (canvasHeight - ph) / 2 - 20;
 

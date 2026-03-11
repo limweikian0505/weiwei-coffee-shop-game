@@ -37,41 +37,39 @@ export class HUD {
    * @param {number} canvasHeight
    */
   render(ctx, canvasWidth, canvasHeight) {
-    // Adaptive HUD height: at least 70px but grows on larger/taller screens
-    const hudH  = Math.max(70, canvasHeight * 0.10);
-    const hudY  = canvasHeight - hudH;
+    // Landscape: shorter HUD bar — use ~8% of height but cap lower
+    const hudH = Math.max(50, canvasHeight * 0.10);
+    const hudY = canvasHeight - hudH;
 
     ctx.save();
 
-    // ── HUD background ────────────────────────────────────────────────────────
     ctx.fillStyle = 'rgba(61,31,0,0.92)';
     _roundRect(ctx, 0, hudY, canvasWidth, hudH, 0);
     ctx.fill();
 
-    // ── Instruction line ──────────────────────────────────────────────────────
-    const instrFont = Math.max(10, canvasWidth * 0.025);
+    // Instruction line — smaller in landscape
+    const instrFont = Math.max(9, canvasWidth * 0.018);
     ctx.font      = `${instrFont}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD180';
     ctx.textAlign = 'center';
-    ctx.fillText('💡 点击等待中的客人来接单', canvasWidth / 2, hudY - 6);
+    ctx.fillText('💡 点击等待中的客人来接单', canvasWidth / 2, hudY - 5);
 
-    // ── Money ─────────────────────────────────────────────────────────────────
-    const moneyFont = Math.max(18, canvasWidth * 0.045);
+    // Money — left side
+    const moneyFont = Math.max(14, canvasHeight * 0.065);
     ctx.font      = `bold ${moneyFont}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD700';
     ctx.textAlign = 'left';
-    ctx.fillText(`💰 $${this.economySystem.money}`, 18, hudY + hudH * 0.65);
+    ctx.fillText(`💰 $${this.economySystem.money}`, 14, hudY + hudH * 0.68);
 
-    // ── Title ─────────────────────────────────────────────────────────────────
-    const titleFont = Math.max(13, canvasWidth * 0.035);
+    // Title — center
+    const titleFont = Math.max(12, canvasHeight * 0.05);
     ctx.font      = `bold ${titleFont}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
-    ctx.fillText('微微咖啡馆', canvasWidth / 2, hudY + hudH * 0.65);
+    ctx.fillText('微微咖啡馆', canvasWidth / 2, hudY + hudH * 0.68);
 
     ctx.restore();
 
-    // ── Streamer banner ───────────────────────────────────────────────────────
     if (this._bannerTimer > 0 && this._bannerText) {
       this._renderBanner(ctx, canvasWidth);
     }

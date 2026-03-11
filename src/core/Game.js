@@ -45,8 +45,8 @@ class Game {
     const H = this.H;
 
     this.tables = [
-      new Table(1, W * 0.28, H * 0.52, 'round2'),
-      new Table(2, W * 0.52, H * 0.60, 'square4'),
+      new Table(1, W * 0.22, H * 0.62, 'round2'),
+      new Table(2, W * 0.45, H * 0.65, 'square4'),
     ];
 
     this.economySystem    = new EconomySystem();
@@ -278,15 +278,16 @@ class Game {
   }
 
   _renderHUDButtons(ctx, W, H) {
-    const hudH = Math.max(70, H * 0.10);
+    const hudH = Math.max(50, H * 0.10);
     const hudY = H - hudH;
-    const bh   = Math.max(32, hudH * 0.44);
+    const bh   = Math.max(28, hudH * 0.56);
     const by   = hudY + (hudH - bh) / 2;
 
     ctx.save();
 
-    const bw = Math.max(80, W * 0.10);
-    const bx = W / 2 + W * 0.08;
+    // In landscape, buttons are sized relative to height, not width
+    const bw = Math.max(70, H * 0.18);
+    const bx = W / 2 + W * 0.06;
     this._btnUpgrade = { x: bx, y: by, w: bw, h: bh };
     ctx.fillStyle   = '#FF9800';
     ctx.strokeStyle = '#E65100';
@@ -294,14 +295,14 @@ class Game {
     _roundRect(ctx, bx, by, bw, bh, 8);
     ctx.fill();
     ctx.stroke();
-    const btnFontSize = Math.max(11, W * 0.025);
+    const btnFontSize = Math.max(10, H * 0.038);
     ctx.font      = `bold ${btnFontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
     ctx.fillText('🏪 升级', bx + bw / 2, by + bh / 2 + btnFontSize * 0.38);
 
-    const mw  = Math.max(48, W * 0.065);
-    const mx2 = bx + bw + 8;
+    const mw  = Math.max(40, H * 0.12);
+    const mx2 = bx + bw + 6;
     this._btnMute = { x: mx2, y: by, w: mw, h: bh };
     ctx.fillStyle   = this._isMuted ? '#666' : '#4CAF50';
     ctx.strokeStyle = this._isMuted ? '#444' : '#2E7D32';
@@ -353,10 +354,10 @@ class Game {
     const H = this.H;
     const n = this.tables.length;
     const positions = [
-      [W * 0.35, H * 0.42],
-      [W * 0.60, H * 0.45],
+      [W * 0.30, H * 0.55],
+      [W * 0.55, H * 0.58],
     ];
-    const pos = positions[n - 2] ?? [W * 0.40 + n * 40, H * 0.50];
+    const pos = positions[n - 2] ?? [W * 0.35 + n * 30, H * 0.62];
     this.tables.push(new Table(n + 1, pos[0], pos[1], 'square4'));
     this.customerSystem.tables = this.tables;
   }
@@ -427,26 +428,31 @@ class Game {
     }
     // Reposition tables so they follow the new layout on orientation change
     if (this.tables && this.tables.length >= 2) {
-      this.tables[0].x = cssW * 0.28;
-      this.tables[0].y = cssH * 0.52;
-      this.tables[1].x = cssW * 0.52;
-      this.tables[1].y = cssH * 0.60;
+      this.tables[0].x = cssW * 0.22;
+      this.tables[0].y = cssH * 0.62;
+      this.tables[1].x = cssW * 0.45;
+      this.tables[1].y = cssH * 0.65;
     }
   }
 
   _drawTitle(ctx, W) {
+    const H = this.H;
+    const isLandscape = W > H;
     ctx.save();
-    const fontSize = Math.max(18, W * 0.05);
+    const fontSize = isLandscape
+      ? Math.max(12, H * 0.055)
+      : Math.max(18, W * 0.05);
     ctx.font      = `bold ${fontSize}px 'Comic Sans MS', 'Chalkboard SE', cursive`;
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(90,40,0,0.4)';
-    ctx.fillText('微微咖啡馆 ☕', W / 2 + 2, 52);
-    const grad = ctx.createLinearGradient(W / 2 - 100, 0, W / 2 + 100, 0);
+    const ty = isLandscape ? Math.max(14, H * 0.05) : 52;
+    ctx.fillText('微微咖啡馆 ☕', W / 2 + 1, ty + 1);
+    const grad = ctx.createLinearGradient(W / 2 - 80, 0, W / 2 + 80, 0);
     grad.addColorStop(0, '#8B4513');
     grad.addColorStop(0.5, '#D2691E');
     grad.addColorStop(1, '#8B4513');
     ctx.fillStyle = grad;
-    ctx.fillText('微微咖啡馆 ☕', W / 2, 50);
+    ctx.fillText('微微咖啡馆 ☕', W / 2, ty);
     ctx.restore();
   }
 }

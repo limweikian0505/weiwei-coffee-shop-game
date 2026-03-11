@@ -109,10 +109,12 @@ export class OrderSystem {
     if (!this.currentOrder) return;
 
     const order  = this.currentOrder;
-    const barW   = 140;
-    const barH   = 18;
-    const barX   = canvasWidth - barW - 20;
-    const barY   = canvasHeight * 0.38;
+    const isLandscape = canvasWidth > canvasHeight;
+    const barW   = Math.min(130, canvasWidth * 0.16);
+    const barH   = 16;
+    // In landscape: place bar top-right (below the goal tracker which moved to top-left)
+    const barX   = canvasWidth - barW - 10;
+    const barY   = isLandscape ? 10 : canvasHeight * 0.38;
 
     ctx.save();
 
