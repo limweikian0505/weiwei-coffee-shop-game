@@ -266,7 +266,7 @@ export class Customer {
   }
 
   _startLeaving(msg = '拜拜！👋') {
-    this.targetX = this.canvasWidth + 40;
+    this.targetX = this.canvasWidth * -0.08;
     this.targetY = this.y;
     this._enterState(STATE.LEAVING, 0);
     this.say(msg, 2);

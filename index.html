@@ -10,8 +10,6 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="theme-color" content="#FFF8F0" />
-  <!-- Force landscape orientation -->
-  <meta name="screen-orientation" content="landscape" />
 
   <title>微微咖啡馆 ☕</title>
   <style>
@@ -62,43 +60,9 @@
       color: #A0724A;
     }
     #loading.hidden { display: none; }
-
-    /* Portrait warning overlay */
-    #portrait-warning {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(61, 31, 0, 0.95);
-      z-index: 9999;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      color: #FFD700;
-      font-family: 'Comic Sans MS', cursive;
-      text-align: center;
-      padding: 20px;
-    }
-    #portrait-warning h2 {
-      font-size: clamp(1.2rem, 5vw, 1.8rem);
-    }
-    #portrait-warning p {
-      font-size: clamp(0.85rem, 3.5vw, 1.1rem);
-      color: #FFD180;
-    }
-    @media (orientation: portrait) {
-      #portrait-warning { display: flex; }
-    }
   </style>
 </head>
 <body>
-
-  <!-- Portrait warning overlay -->
-  <div id="portrait-warning">
-    <h2>📱 请旋转屏幕</h2>
-    <p>微微咖啡馆在横屏模式下游玩</p>
-    <p>Please rotate your device to landscape</p>
-  </div>
 
   <!-- Loading screen -->
   <div id="loading">

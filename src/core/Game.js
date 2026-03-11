@@ -46,8 +46,8 @@ class Game {
     const H = this.H;
 
     this.tables = [
-      new Table(1, W * 0.22, H * 0.62, 'round2'),
-      new Table(2, W * 0.45, H * 0.65, 'square4'),
+      new Table(1, W * 0.38, H * 0.52, 'round2'),
+      new Table(2, W * 0.62, H * 0.55, 'square4'),
     ];
 
     this.economySystem    = new EconomySystem();
@@ -411,10 +411,10 @@ class Game {
     const H = this.H;
     const n = this.tables.length;
     const positions = [
-      [W * 0.30, H * 0.55],
-      [W * 0.55, H * 0.58],
+      [W * 0.42, H * 0.48],
+      [W * 0.68, H * 0.50],
     ];
-    const pos = positions[n - 2] ?? [W * 0.35 + n * 30, H * 0.62];
+    const pos = positions[n - 2] ?? [W * 0.50 + n * 30, H * 0.52];
     this.tables.push(new Table(n + 1, pos[0], pos[1], 'square4'));
     this.customerSystem.tables = this.tables;
   }
@@ -486,10 +486,10 @@ class Game {
     }
     // Reposition tables so they follow the new layout on orientation change
     if (this.tables && this.tables.length >= 2) {
-      this.tables[0].x = cssW * 0.22;
-      this.tables[0].y = cssH * 0.62;
-      this.tables[1].x = cssW * 0.45;
-      this.tables[1].y = cssH * 0.65;
+      this.tables[0].x = cssW * 0.38;
+      this.tables[0].y = cssH * 0.52;
+      this.tables[1].x = cssW * 0.62;
+      this.tables[1].y = cssH * 0.55;
     }
   }
 

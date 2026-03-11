@@ -10,11 +10,14 @@
  *   - Optional sky-tint overlay (dusk/night effect)
  *
  * Room geometry (all responsive to canvas W × H):
- *   backCorner  (W*0.50, H*0.36)  — apex / back corner
- *   leftCorner  (W*0.08, H*0.49)  — front-left corner
- *   rightCorner (W*0.92, H*0.49)  — front-right corner
- *   frontCorner (W*0.50, H*0.62)  — front apex (nearest viewer)
+ *   backCorner  (W*0.58, H*0.30)  — apex / back corner
+ *   leftCorner  (W*0.20, H*0.44)  — front-left corner (door side)
+ *   rightCorner (W*0.96, H*0.44)  — front-right corner
+ *   frontCorner (W*0.58, H*0.58)  — front apex (nearest viewer)
  *   wallH       H*0.14            — height of vertical wall faces
+ *
+ * A street/road scene is drawn to the left before the cafe room, giving
+ * customers a visible path to walk in from off-screen.
  *
  * Exported helpers:
  *   isoOriginX(W)  — back-corner screen X
@@ -24,10 +27,10 @@
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
 
 /** Screen X of the isometric back-corner (world origin). */
-export function isoOriginX(W) { return W * 0.50; }
+export function isoOriginX(W) { return W * 0.58; }
 
 /** Screen Y of the isometric back-corner (world origin). */
-export function isoOriginY(H) { return H * 0.36; }
+export function isoOriginY(H) { return H * 0.30; }
 
 export class CafeRenderer {
   constructor(w, h) {
@@ -40,10 +43,13 @@ export class CafeRenderer {
 
     // ── Room geometry ─────────────────────────────────────────────────────────
     const bx = isoOriginX(W);  const by = isoOriginY(H);   // back corner
-    const lx = W * 0.08;       const ly = H * 0.49;         // left corner
-    const rx = W * 0.92;       const ry = H * 0.49;         // right corner
-    const fx = W * 0.50;       const fy = H * 0.62;         // front corner
+    const lx = W * 0.20;       const ly = H * 0.44;         // left corner
+    const rx = W * 0.96;       const ry = H * 0.44;         // right corner
+    const fx = W * 0.58;       const fy = H * 0.58;         // front corner
     const wallH = H * 0.14;                                   // wall face height
+
+    // ── Street / outdoor scene (drawn first, behind everything) ───────────────
+    this._drawStreet(ctx, W, H);
 
     // ── Background (ceiling / sky above room) ─────────────────────────────────
     this._drawBackground(ctx, W, H, bx, by, lx, ly, rx, ry, wallH);
@@ -68,6 +74,97 @@ export class CafeRenderer {
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
     }
+  }
+
+  // ─── Street / outdoor scene ─────────────────────────────────────────────────
+
+  _drawStreet(ctx, W, H) {
+    ctx.save();
+
+    // Full canvas sky background
+    ctx.fillStyle = '#D4EDFF';
+    ctx.fillRect(0, 0, W, H);
+
+    // Road trapezoid (asphalt): left side of canvas below the cafe door area
+    // Top edge: (0, H*0.40) → (W*0.30, H*0.44)
+    // Bottom edge: (0, H*0.75) → (W*0.25, H*0.58)
+    ctx.beginPath();
+    ctx.moveTo(0,        H * 0.40);
+    ctx.lineTo(W * 0.30, H * 0.44);
+    ctx.lineTo(W * 0.25, H * 0.58);
+    ctx.lineTo(0,        H * 0.75);
+    ctx.closePath();
+    ctx.fillStyle = '#AAAAAA';
+    ctx.fill();
+
+    // Pavement/sidewalk strip along the top edge of the road
+    ctx.beginPath();
+    ctx.moveTo(0,        H * 0.40);
+    ctx.lineTo(W * 0.30, H * 0.44);
+    ctx.lineTo(W * 0.30, H * 0.44 - 8);
+    ctx.lineTo(0,        H * 0.40 - 8);
+    ctx.closePath();
+    ctx.fillStyle = '#CCCCCC';
+    ctx.fill();
+
+    // Dashed yellow centre-line stripe down the road
+    ctx.save();
+    ctx.strokeStyle = '#FFD700';
+    ctx.lineWidth   = Math.max(2, H * 0.004);
+    ctx.setLineDash([H * 0.04, H * 0.03]);
+    ctx.beginPath();
+    // Centre of road: interpolate between top-mid and bottom-mid of the trapezoid
+    ctx.moveTo(0,        H * 0.575);
+    ctx.lineTo(W * 0.275, H * 0.51);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Lamp post at roughly (W*0.05, H*0.32)
+    const lpX = W * 0.05;
+    const lpY = H * 0.32;
+    const postW = Math.max(5, W * 0.008);
+    const postH = H * 0.18;
+    // Post shaft (brown rect)
+    ctx.fillStyle   = '#5C3A1E';
+    ctx.strokeStyle = '#3A1E08';
+    ctx.lineWidth   = 1;
+    ctx.fillRect(lpX - postW / 2, lpY, postW, postH);
+    ctx.strokeRect(lpX - postW / 2, lpY, postW, postH);
+    // Lamp head (circle)
+    ctx.beginPath();
+    ctx.arc(lpX, lpY, postW * 1.8, 0, Math.PI * 2);
+    ctx.fillStyle   = '#F5E642';
+    ctx.strokeStyle = '#3A1E08';
+    ctx.lineWidth   = 1.5;
+    ctx.fill();
+    ctx.stroke();
+    // Arm extending right
+    ctx.beginPath();
+    ctx.moveTo(lpX, lpY);
+    ctx.lineTo(lpX + postW * 2.5, lpY + postH * 0.10);
+    ctx.strokeStyle = '#5C3A1E';
+    ctx.lineWidth   = postW * 0.8;
+    ctx.stroke();
+
+    // Small bushes/grass tufts along the pavement edge
+    const bushPositions = [W * 0.08, W * 0.14, W * 0.21];
+    for (const bx2 of bushPositions) {
+      const by2 = H * 0.395;
+      // Two overlapping circles for each bush
+      ctx.fillStyle   = '#5A9E3A';
+      ctx.strokeStyle = '#3A6A1E';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.arc(bx2,                   by2, W * 0.012, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(bx2 + W * 0.008,       by2 - H * 0.005, W * 0.010, 0, Math.PI * 2);
+      ctx.fillStyle = '#72B84A';
+      ctx.fill(); ctx.stroke();
+    }
+
+    ctx.restore();
   }
 
   // ─── Background ─────────────────────────────────────────────────────────────
@@ -237,9 +334,9 @@ export class CafeRenderer {
   _drawDoor(ctx, bx, by, lx, ly, wallH, H) {
     ctx.save();
 
-    // Door at ~30% along the left wall from the back corner
-    const t0 = 0.22;
-    const t1 = 0.42;
+    // Door near the leftCorner end of the left wall (closer to the street entrance)
+    const t0 = 0.55;
+    const t1 = 0.80;
 
     const d0x = bx + (lx - bx) * t0;  const d0y = by + (ly - by) * t0;
     const d1x = bx + (lx - bx) * t1;  const d1y = by + (ly - by) * t1;
