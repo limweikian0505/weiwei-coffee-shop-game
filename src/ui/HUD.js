@@ -41,11 +41,6 @@ export class HUD {
     const hudH  = Math.max(70, canvasHeight * 0.10);
     const hudY  = canvasHeight - hudH;
 
-    // Adaptive font sizes (clamped for readability on all screen sizes)
-    const moneyFontSize = Math.max(18, canvasWidth * 0.045);
-    const labelFontSize = Math.max(14, canvasWidth * 0.035);
-    const hintFontSize  = Math.max(12, canvasWidth * 0.025);
-
     ctx.save();
 
     // ── HUD background ────────────────────────────────────────────────────────
@@ -54,28 +49,25 @@ export class HUD {
     ctx.fill();
 
     // ── Instruction line ──────────────────────────────────────────────────────
-    ctx.font      = `${hintFontSize}px 'Comic Sans MS', cursive`;
+    const instrFont = Math.max(10, canvasWidth * 0.025);
+    ctx.font      = `${instrFont}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD180';
     ctx.textAlign = 'center';
-    ctx.fillText('💡 点击等待中的客人来接单', canvasWidth / 2, hudY - 8);
+    ctx.fillText('💡 点击等待中的客人来接单', canvasWidth / 2, hudY - 6);
 
     // ── Money ─────────────────────────────────────────────────────────────────
-    ctx.font      = `bold ${moneyFontSize}px 'Comic Sans MS', cursive`;
+    const moneyFont = Math.max(18, canvasWidth * 0.045);
+    ctx.font      = `bold ${moneyFont}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD700';
     ctx.textAlign = 'left';
     ctx.fillText(`💰 $${this.economySystem.money}`, 18, hudY + hudH * 0.65);
 
     // ── Title ─────────────────────────────────────────────────────────────────
-    ctx.font      = `bold ${labelFontSize}px 'Comic Sans MS', cursive`;
+    const titleFont = Math.max(13, canvasWidth * 0.035);
+    ctx.font      = `bold ${titleFont}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
     ctx.fillText('微微咖啡馆', canvasWidth / 2, hudY + hudH * 0.65);
-
-    // ── Phase label ───────────────────────────────────────────────────────────
-    ctx.font      = `${hintFontSize}px 'Comic Sans MS', cursive`;
-    ctx.fillStyle = '#999';
-    ctx.textAlign = 'right';
-    ctx.fillText('Phase 1 · MVP', canvasWidth - 14, hudY + hudH * 0.65);
 
     ctx.restore();
 

@@ -1,43 +1,24 @@
 /**
  * responsive.js
- * Utility helpers for responsive sizing based on canvas/screen dimensions.
+ * Utility functions for responsive canvas sizing.
  */
 
-/**
- * Returns true if the device looks like a narrow-screen touch device (phone).
- * Uses both screen width AND touch support so that tablets / touchscreen laptops
- * with wider screens are not incorrectly treated as phones.
- */
 export function isMobile() {
-  return window.innerWidth < 768 && ('ontouchstart' in window);
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
-/** Scale a base value by the ratio of current canvas width to a reference width (1280px). */
-export function scale(baseValue, canvasW, referenceW = 1280) {
-  return baseValue * (canvasW / referenceW);
+export function scaledFontSize(base, canvasW, minSize = 10) {
+  return Math.max(minSize, canvasW * base);
 }
 
-/** Clamp a value between min and max. */
-export function clamp(val, min, max) {
-  return Math.min(max, Math.max(min, val));
+export function touchHitRadius(canvasW) {
+  return Math.max(44, canvasW * 0.06);
 }
 
-/**
- * Get a font size that scales with canvas width, clamped between minPx and maxPx.
- * @param {number} fraction - fraction of canvas width (e.g. 0.03 = 3%)
- * @param {number} canvasW
- * @param {number} minPx
- * @param {number} maxPx
- */
-export function scaledFontSize(fraction, canvasW, minPx, maxPx) {
-  return clamp(Math.round(canvasW * fraction), minPx, maxPx);
+export function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
 }
 
-/**
- * Get a touch-friendly hit radius (at least 44px, the iOS HIG minimum).
- * @param {number} visualRadius - the visual radius of the element
- * @param {number} canvasW
- */
-export function touchHitRadius(visualRadius, canvasW) {
-  return Math.max(44, visualRadius, canvasW * 0.05);
+export function scale(value, canvasW, referenceW = 375) {
+  return value * (canvasW / referenceW);
 }

@@ -25,8 +25,8 @@ export class CustomerRenderer {
     const { x, y, color, name, isStreamer, isSpecial, emoji, sparkleTimer, state } = customer;
 
     // Responsive radii — large enough to tap on small screens
-    const bodyR = Math.max(18, canvasW * 0.025);
-    const headR = Math.max(14, canvasW * 0.019);
+    const bodyR = Math.max(14, canvasW * 0.048);
+    const headR = Math.max(11, canvasW * 0.037);
 
     ctx.save();
 
@@ -94,7 +94,7 @@ export class CustomerRenderer {
 
   _drawNameTag(ctx, cx, cy, name, isStreamer, canvasW) {
     const padding  = 6;
-    const fontSize = Math.max(10, canvasW * 0.018);
+    const fontSize = Math.max(10, canvasW * 0.022);
     ctx.font      = `bold ${fontSize}px 'Comic Sans MS', cursive`;
     const tw      = ctx.measureText(name).width;
     const w       = tw + padding * 2;
