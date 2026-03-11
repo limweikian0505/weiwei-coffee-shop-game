@@ -2,27 +2,44 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>微微咖啡馆 ☕ — Weiwei Coffee Shop</title>
+  <!-- 关键：阻止手机缩放，适配刘海屏 -->
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+
+  <!-- PWA / 全屏模式 -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#FFF8F0" />
+
+  <title>微微咖啡馆 ☕</title>
   <style>
-    /* Reset */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    body {
-      background: #FFF8F0;   /* warm cream */
+    html, body {
+      width: 100%;
+      height: 100%;
       overflow: hidden;
+      background: #FFF8F0;
       font-family: 'Comic Sans MS', 'Chalkboard SE', cursive;
+      /* 阻止手机的下拉刷新和橡皮筋效果 */
+      overscroll-behavior: none;
+      -webkit-overflow-scrolling: touch;
+      touch-action: none;
     }
 
-    /* Full-window canvas */
     #gameCanvas {
       display: block;
-      width: 100vw;
-      height: 100vh;
+      /* 占满安全区域（考虑刘海屏） */
+      width: 100%;
+      height: 100%;
+      /* 手机上阻止长按出现菜单 */
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+      touch-action: none;
       cursor: pointer;
     }
 
-    /* Loading overlay — hidden once the game starts */
     #loading {
       position: fixed;
       inset: 0;
@@ -35,11 +52,11 @@
       z-index: 999;
     }
     #loading h1 {
-      font-size: 2.4rem;
+      font-size: clamp(1.5rem, 6vw, 2.4rem);
       color: #8B4513;
     }
     #loading p {
-      font-size: 1rem;
+      font-size: clamp(0.8rem, 3vw, 1rem);
       color: #A0724A;
     }
     #loading.hidden { display: none; }
@@ -61,14 +78,20 @@
 
   <!-- Hide loading screen once the module finishes loading -->
   <script type="module">
-    // The Game module sets up DOMContentLoaded; hide loader after a brief tick
-    // so the canvas is ready before we reveal it.
     window.addEventListener('load', () => {
       requestAnimationFrame(() => {
         const loader = document.getElementById('loading');
         if (loader) loader.classList.add('hidden');
       });
     });
+
+    // 阻止手机双指缩放
+    document.addEventListener('gesturestart',  e => e.preventDefault());
+    document.addEventListener('gesturechange', e => e.preventDefault());
+    document.addEventListener('gestureend',    e => e.preventDefault());
+
+    // 阻止手机下拉刷新（多点触控）
+    document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
   </script>
 
 </body>

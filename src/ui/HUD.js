@@ -2,6 +2,8 @@
  * HUD.js
  * Renders the bottom HUD bar that always shows money, game title, and phase info.
  * Also renders the top streamer announcement banner when active.
+ *
+ * All sizes are adaptive so the HUD is finger-friendly on mobile screens.
  */
 
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
@@ -35,8 +37,14 @@ export class HUD {
    * @param {number} canvasHeight
    */
   render(ctx, canvasWidth, canvasHeight) {
-    const hudH  = 80;
+    // Adaptive HUD height: at least 70px but grows on larger/taller screens
+    const hudH  = Math.max(70, canvasHeight * 0.10);
     const hudY  = canvasHeight - hudH;
+
+    // Adaptive font sizes (clamped for readability on all screen sizes)
+    const moneyFontSize = Math.max(18, canvasWidth * 0.045);
+    const labelFontSize = Math.max(14, canvasWidth * 0.035);
+    const hintFontSize  = Math.max(12, canvasWidth * 0.025);
 
     ctx.save();
 
@@ -46,28 +54,28 @@ export class HUD {
     ctx.fill();
 
     // ── Instruction line ──────────────────────────────────────────────────────
-    ctx.font      = "12px 'Comic Sans MS', cursive";
+    ctx.font      = `${hintFontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD180';
     ctx.textAlign = 'center';
     ctx.fillText('💡 点击等待中的客人来接单', canvasWidth / 2, hudY - 8);
 
     // ── Money ─────────────────────────────────────────────────────────────────
-    ctx.font      = "bold 28px 'Comic Sans MS', cursive";
+    ctx.font      = `bold ${moneyFontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD700';
     ctx.textAlign = 'left';
-    ctx.fillText(`💰 $${this.economySystem.money}`, 18, hudY + 50);
+    ctx.fillText(`💰 $${this.economySystem.money}`, 18, hudY + hudH * 0.65);
 
     // ── Title ─────────────────────────────────────────────────────────────────
-    ctx.font      = "bold 16px 'Comic Sans MS', cursive";
+    ctx.font      = `bold ${labelFontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
-    ctx.fillText('微微咖啡馆', canvasWidth / 2, hudY + 50);
+    ctx.fillText('微微咖啡馆', canvasWidth / 2, hudY + hudH * 0.65);
 
     // ── Phase label ───────────────────────────────────────────────────────────
-    ctx.font      = "12px 'Comic Sans MS', cursive";
+    ctx.font      = `${hintFontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#999';
     ctx.textAlign = 'right';
-    ctx.fillText('Phase 1 · MVP', canvasWidth - 14, hudY + 50);
+    ctx.fillText('Phase 1 · MVP', canvasWidth - 14, hudY + hudH * 0.65);
 
     ctx.restore();
 
@@ -95,7 +103,8 @@ export class HUD {
     _roundRect(ctx, 40, by, canvasWidth - 80, bh, 10);
     ctx.stroke();
 
-    ctx.font      = "bold 14px 'Comic Sans MS', cursive";
+    const bannerFontSize = Math.max(13, canvasWidth * 0.028);
+    ctx.font      = `bold ${bannerFontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFD700';
     ctx.textAlign = 'center';
     ctx.fillText(this._bannerText, canvasWidth / 2, by + 24);

@@ -28,16 +28,21 @@ import { STATE }             from '../entities/Customer.js';
 import { MENU_ITEMS }        from '../data/MenuData.js';
 import { UPGRADES }          from '../data/UpgradeData.js';
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
+import { setupOrientationHandler } from '../utils/orientation.js';
 
 class Game {
   constructor() {
     this.canvas = document.getElementById('gameCanvas');
     this.ctx    = this.canvas.getContext('2d');
+    // Logical (CSS-pixel) dimensions — set by _resize()
+    this.W = window.innerWidth;
+    this.H = window.innerHeight;
     this._resize();
-    window.addEventListener('resize', () => this._resize());
+    // Orientation/resize handled via utility (covers both orientationchange & resize)
+    setupOrientationHandler(this.canvas, this);
 
-    const W = this.canvas.width;
-    const H = this.canvas.height;
+    const W = this.W;
+    const H = this.H;
 
     this.tables = [
       new Table(1, W * 0.28, H * 0.52, 'round2'),
@@ -90,11 +95,29 @@ class Game {
     this._btnUpgrade     = null;
     this._btnMute        = null;
 
-    this.canvas.addEventListener('click',      (e) => this._onClick(e));
+    // ── Input ─────────────────────────────────────────────────────────────────
+    this.canvas.addEventListener('click', (e) => this._onClick(e));
+
+    // Track touch start position to distinguish taps from swipes
+    let _touchStartX = 0;
+    let _touchStartY = 0;
+
     this.canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const t = e.changedTouches[0];
-      this._onClick({ clientX: t.clientX, clientY: t.clientY });
+      _touchStartX = t.clientX;
+      _touchStartY = t.clientY;
+    }, { passive: false });
+
+    this.canvas.addEventListener('touchend', (e) => {
+      e.preventDefault();
+      const t = e.changedTouches[0];
+      // Only fire a click if the finger didn't move more than 10px (not a swipe)
+      const dx = t.clientX - _touchStartX;
+      const dy = t.clientY - _touchStartY;
+      if (Math.hypot(dx, dy) < 10) {
+        this._onClick({ clientX: t.clientX, clientY: t.clientY });
+      }
     }, { passive: false });
 
     this._loop = new GameLoop(this);
@@ -136,9 +159,9 @@ class Game {
   }
 
   render() {
-    const { ctx, canvas } = this;
-    const W = canvas.width;
-    const H = canvas.height;
+    const { ctx } = this;
+    const W = this.W;
+    const H = this.H;
 
     ctx.clearRect(0, 0, W, H);
 
@@ -149,8 +172,8 @@ class Game {
     }
 
     for (const customer of this.customerSystem.customers) {
-      this.customerRenderer.render(ctx, customer);
-      this.chatBubble.render(ctx, customer);
+      this.customerRenderer.render(ctx, customer, W);
+      this.chatBubble.render(ctx, customer, W);
     }
 
     this.orderSystem.render(ctx, W, H);
@@ -167,6 +190,19 @@ class Game {
     this._drawTitle(ctx, W);
   }
 
+  // ─── Input ───────────────────────────────────────────────────────────────────
+
+  /** Extract CSS-pixel coordinates from a mouse or synthetic touch event. */
+  _getEventCoords(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    // getBoundingClientRect() and clientX/Y are both in CSS pixels,
+    // so a simple subtraction gives the correct canvas-space position.
+    return {
+      mx: e.clientX - rect.left,
+      my: e.clientY - rect.top,
+    };
+  }
+
   _onClick(e) {
     if (!audioManager._initialized) {
       audioManager.init();
@@ -175,9 +211,7 @@ class Game {
       if (!this._isMuted) audioManager.startMusic();
     }
 
-    const rect = this.canvas.getBoundingClientRect();
-    const mx   = e.clientX - rect.left;
-    const my   = e.clientY - rect.top;
+    const { mx, my } = this._getEventCoords(e);
 
     if (this.daySummary.visible) {
       const action = this.daySummary.handleClick(mx, my);
@@ -190,7 +224,6 @@ class Game {
       if (result === 'CLOSE') {
         this.upgradeShop.close();
       } else if (result && result !== 'CLOSE') {
-        // result is an upgradeId — spend money and apply
         const upgrade = UPGRADES.find((u) => u.id === result);
         if (upgrade && this.economySystem.spendMoney(upgrade.cost)) {
           this._applyUpgrade(result);
@@ -230,10 +263,13 @@ class Game {
       return;
     }
 
+    // Touch-friendly hit radius: at least 44px (iOS HIG) or ~6% of canvas width
+    const touchRadius = Math.max(44, this.W * 0.06);
+
     for (const customer of this.customerSystem.customers) {
       if (customer.state === STATE.WAITING && customer.order) {
         const dist = Math.hypot(mx - customer.x, my - customer.y);
-        if (dist < 30) {
+        if (dist < touchRadius) {
           this.orderPanel.open(customer);
           return;
         }
@@ -242,14 +278,15 @@ class Game {
   }
 
   _renderHUDButtons(ctx, W, H) {
-    const hudY = H - 80;
-    const bh   = 28;
+    const hudH = Math.max(70, H * 0.10);
+    const hudY = H - hudH;
+    const bh   = Math.max(32, hudH * 0.44);
+    const by   = hudY + (hudH - bh) / 2;
 
     ctx.save();
 
-    const bw = 80;
-    const bx = W / 2 + 80;
-    const by = hudY + 26;
+    const bw = Math.max(80, W * 0.10);
+    const bx = W / 2 + W * 0.08;
     this._btnUpgrade = { x: bx, y: by, w: bw, h: bh };
     ctx.fillStyle   = '#FF9800';
     ctx.strokeStyle = '#E65100';
@@ -257,22 +294,22 @@ class Game {
     _roundRect(ctx, bx, by, bw, bh, 8);
     ctx.fill();
     ctx.stroke();
-    ctx.font      = "bold 12px 'Comic Sans MS', cursive";
+    const btnFontSize = Math.max(11, W * 0.025);
+    ctx.font      = `bold ${btnFontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
-    ctx.fillText('🏪 升级', bx + bw / 2, by + 19);
+    ctx.fillText('🏪 升级', bx + bw / 2, by + bh / 2 + btnFontSize * 0.38);
 
-    const mw  = 50;
-    const mx2 = W / 2 + 170;
-    const my2 = by;
-    this._btnMute = { x: mx2, y: my2, w: mw, h: bh };
+    const mw  = Math.max(48, W * 0.065);
+    const mx2 = bx + bw + 8;
+    this._btnMute = { x: mx2, y: by, w: mw, h: bh };
     ctx.fillStyle   = this._isMuted ? '#666' : '#4CAF50';
     ctx.strokeStyle = this._isMuted ? '#444' : '#2E7D32';
-    _roundRect(ctx, mx2, my2, mw, bh, 8);
+    _roundRect(ctx, mx2, by, mw, bh, 8);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = '#FFF';
-    ctx.fillText(this._isMuted ? '🔇' : '🔊', mx2 + mw / 2, my2 + 19);
+    ctx.fillText(this._isMuted ? '🔇' : '🔊', mx2 + mw / 2, by + bh / 2 + btnFontSize * 0.38);
 
     ctx.restore();
   }
@@ -312,8 +349,8 @@ class Game {
   }
 
   _addTable() {
-    const W = this.canvas.width;
-    const H = this.canvas.height;
+    const W = this.W;
+    const H = this.H;
     const n = this.tables.length;
     const positions = [
       [W * 0.35, H * 0.42],
@@ -331,7 +368,6 @@ class Game {
       ? (stats.totalStars / stats.customersServed).toFixed(1)
       : '0.0';
 
-    // Finalize the 'no_angry' goal at end of day (can't be done mid-day)
     const goals = this.goalSystem.getDailyGoals();
     const noAngryGoal = goals.find((g) => g.id === 'no_angry');
     if (noAngryGoal) {
@@ -357,21 +393,51 @@ class Game {
     audioManager.play('new_day');
   }
 
+  // ─── Private helpers ─────────────────────────────────────────────────────────
+
   _resize() {
-    this.canvas.width  = window.innerWidth;
-    this.canvas.height = window.innerHeight;
+    const dpr  = window.devicePixelRatio || 1;
+    const cssW = window.innerWidth;
+    const cssH = window.innerHeight;
+
+    // Set canvas physical pixel size for sharp rendering on Retina screens
+    this.canvas.width  = cssW * dpr;
+    this.canvas.height = cssH * dpr;
+
+    // Keep CSS display size unchanged
+    this.canvas.style.width  = cssW + 'px';
+    this.canvas.style.height = cssH + 'px';
+
+    // Scale the drawing context so all coordinates remain in CSS pixels
+    // Reset transform first (defensive; canvas.width assignment already resets it)
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    this.ctx.scale(dpr, dpr);
+
+    // Store logical (CSS-pixel) dimensions used throughout game logic
+    this.W = cssW;
+    this.H = cssH;
+
     if (this.cafeRenderer) {
-      this.cafeRenderer.w = this.canvas.width;
-      this.cafeRenderer.h = this.canvas.height;
+      this.cafeRenderer.w = cssW;
+      this.cafeRenderer.h = cssH;
     }
     if (this.customerSystem) {
-      this.customerSystem.canvasW = this.canvas.width;
+      this.customerSystem.canvasW = cssW;
+      this.customerSystem.canvasH = cssH;
+    }
+    // Reposition tables so they follow the new layout on orientation change
+    if (this.tables && this.tables.length >= 2) {
+      this.tables[0].x = cssW * 0.28;
+      this.tables[0].y = cssH * 0.52;
+      this.tables[1].x = cssW * 0.52;
+      this.tables[1].y = cssH * 0.60;
     }
   }
 
   _drawTitle(ctx, W) {
     ctx.save();
-    ctx.font      = "bold 26px 'Comic Sans MS', 'Chalkboard SE', cursive";
+    const fontSize = Math.max(18, W * 0.05);
+    ctx.font      = `bold ${fontSize}px 'Comic Sans MS', 'Chalkboard SE', cursive`;
     ctx.textAlign = 'center';
     ctx.fillStyle = 'rgba(90,40,0,0.4)';
     ctx.fillText('微微咖啡馆 ☕', W / 2 + 2, 52);

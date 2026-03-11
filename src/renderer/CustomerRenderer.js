@@ -8,6 +8,8 @@
  *   - Eyes + smile
  *   - Name tag below
  *   - Optional: crown for VIP, phone for streamers, gold sparkles
+ *
+ * Sizes scale with canvasW so customers are large enough to tap on mobile.
  */
 
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
@@ -17,15 +19,20 @@ export class CustomerRenderer {
    * Draw a single customer.
    * @param {CanvasRenderingContext2D} ctx
    * @param {Customer} customer
+   * @param {number} [canvasW=360] - logical canvas width for responsive sizing
    */
-  render(ctx, customer) {
+  render(ctx, customer, canvasW = 360) {
     const { x, y, color, name, isStreamer, isSpecial, emoji, sparkleTimer, state } = customer;
+
+    // Responsive radii — large enough to tap on small screens
+    const bodyR = Math.max(18, canvasW * 0.025);
+    const headR = Math.max(14, canvasW * 0.019);
 
     ctx.save();
 
     // Golden glow for streamers
     if (isStreamer && sparkleTimer > 0) {
-      this._drawSparkles(ctx, x, y, sparkleTimer);
+      this._drawSparkles(ctx, x, y, sparkleTimer, bodyR);
     }
 
     // Glow outline for streamers
@@ -39,7 +46,7 @@ export class CustomerRenderer {
     ctx.strokeStyle = this._darken(color);
     ctx.lineWidth   = 3;
     ctx.beginPath();
-    ctx.arc(x, y + 6, 18, 0, Math.PI * 2);
+    ctx.arc(x, y + bodyR * 0.33, bodyR, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
@@ -49,34 +56,35 @@ export class CustomerRenderer {
     ctx.strokeStyle = '#C49A6C';
     ctx.lineWidth   = 2.5;
     ctx.beginPath();
-    ctx.arc(x, y - 12, 14, 0, Math.PI * 2);
+    ctx.arc(x, y - headR * 0.86, headR, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
     // ── Face: emoji ───────────────────────────────────────────────────────────
-    ctx.font      = '14px serif';
+    const emojiFontSize = Math.max(12, canvasW * 0.019);
+    ctx.font      = `${emojiFontSize}px serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(emoji, x, y - 7);
+    ctx.fillText(emoji, x, y - headR * 0.86 + emojiFontSize * 0.4);
 
     // ── Crown for VIP / special ───────────────────────────────────────────────
     if (isSpecial && emoji === '👑') {
-      ctx.font = '14px serif';
-      ctx.fillText('👑', x, y - 28);
+      ctx.font = `${emojiFontSize}px serif`;
+      ctx.fillText('👑', x, y - headR * 0.86 - headR);
     }
 
     // ── Phone icon for streamers ───────────────────────────────────────────────
     if (isStreamer) {
-      ctx.font = '14px serif';
-      ctx.fillText('📱', x + 20, y - 8);
+      ctx.font = `${emojiFontSize}px serif`;
+      ctx.fillText('📱', x + bodyR + 4, y - headR * 0.4);
     }
 
     // ── Name tag ──────────────────────────────────────────────────────────────
     ctx.shadowBlur = 0;
-    this._drawNameTag(ctx, x, y + 28, name, isStreamer);
+    this._drawNameTag(ctx, x, y + bodyR + 10, name, isStreamer, canvasW);
 
     // ── Waiting indicator ─────────────────────────────────────────────────────
     if (state === 'WAITING') {
-      this._drawWaitingIndicator(ctx, x, y - 30, customer);
+      this._drawWaitingIndicator(ctx, x, y - headR * 0.86 - headR - 4, customer, canvasW);
     }
 
     ctx.restore();
@@ -84,12 +92,13 @@ export class CustomerRenderer {
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
 
-  _drawNameTag(ctx, cx, cy, name, isStreamer) {
-    const padding = 6;
-    ctx.font      = "bold 10px 'Comic Sans MS', cursive";
+  _drawNameTag(ctx, cx, cy, name, isStreamer, canvasW) {
+    const padding  = 6;
+    const fontSize = Math.max(10, canvasW * 0.018);
+    ctx.font      = `bold ${fontSize}px 'Comic Sans MS', cursive`;
     const tw      = ctx.measureText(name).width;
     const w       = tw + padding * 2;
-    const h       = 16;
+    const h       = fontSize + 6;
 
     ctx.fillStyle   = isStreamer ? '#FF6B9D' : 'rgba(255,255,255,0.85)';
     ctx.strokeStyle = isStreamer ? '#CC3D6B' : '#C8A882';
@@ -100,15 +109,15 @@ export class CustomerRenderer {
 
     ctx.fillStyle = isStreamer ? '#FFF' : '#3D1F00';
     ctx.textAlign = 'center';
-    ctx.fillText(name, cx, cy + 11);
+    ctx.fillText(name, cx, cy + fontSize);
   }
 
-  _drawWaitingIndicator(ctx, cx, cy, customer) {
+  _drawWaitingIndicator(ctx, cx, cy, customer, canvasW) {
     // ── Patience progress bar ─────────────────────────────────────────────────
-    const barW   = 40;
+    const barW   = Math.max(40, canvasW * 0.07);
     const barH   = 7;
     const barX   = cx - barW / 2;
-    const barY   = cy - 12; // positions bar at customer.y - 42 (cy = y - 30)
+    const barY   = cy - 12;
     const ratio  = Math.max(0, Math.min(1, customer.stateTimer / customer.patience));
 
     // Background (light red)
@@ -138,14 +147,14 @@ export class CustomerRenderer {
     ctx.fillText('!', cx, barY - 2);
   }
 
-  _drawSparkles(ctx, cx, cy, timer) {
+  _drawSparkles(ctx, cx, cy, timer, bodyR) {
     const count = 8;
     const angle = (timer * 2) % (Math.PI * 2); // rotate over time
     ctx.fillStyle = 'rgba(255, 215, 0, 0.7)';
     ctx.font      = '14px serif';
     for (let i = 0; i < count; i++) {
       const a = angle + (i / count) * Math.PI * 2;
-      const r = 28 + Math.sin(timer * 3 + i) * 6;
+      const r = bodyR + 10 + Math.sin(timer * 3 + i) * 6;
       ctx.fillText('✦', cx + Math.cos(a) * r, cy + Math.sin(a) * r);
     }
   }

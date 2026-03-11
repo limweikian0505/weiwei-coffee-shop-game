@@ -6,6 +6,7 @@
  * Streamers:        pink background + "📱直播中" badge.
  *
  * The bubble fades out as chatTimer approaches 0.
+ * Font size scales with canvasW for readability on small screens.
  */
 
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
@@ -15,8 +16,9 @@ export class ChatBubble {
    * Draw a chat bubble for a single customer if they have an active message.
    * @param {CanvasRenderingContext2D} ctx
    * @param {Customer} customer
+   * @param {number} [canvasW=360] - logical canvas width for responsive sizing
    */
-  render(ctx, customer) {
+  render(ctx, customer, canvasW = 360) {
     if (!customer.chatMessage || customer.chatTimer <= 0) return;
 
     const { x, y, chatMessage, chatTimer, isStreamer } = customer;
@@ -27,9 +29,10 @@ export class ChatBubble {
     ctx.save();
     ctx.globalAlpha = alpha;
 
-    const padding = 10;
-    const lineH   = 18;
-    ctx.font      = "bold 12px 'Comic Sans MS', cursive";
+    const padding  = 10;
+    const lineH    = 18;
+    const fontSize = Math.max(11, canvasW * 0.022);
+    ctx.font      = `bold ${fontSize}px 'Comic Sans MS', cursive`;
 
     // Measure text; handle multi-line via '\n' if needed
     const lines  = chatMessage.split('\n');
@@ -70,7 +73,7 @@ export class ChatBubble {
     // ── Streamer badge ─────────────────────────────────────────────────────────
     let textOffsetY = 0;
     if (isStreamer) {
-      ctx.font      = "bold 10px 'Comic Sans MS', cursive";
+      ctx.font      = `bold ${Math.max(10, fontSize - 2)}px 'Comic Sans MS', cursive`;
       ctx.fillStyle = '#FFF';
       ctx.textAlign = 'left';
       ctx.fillText('📱直播中', bx + padding, by + padding + 10);
@@ -78,7 +81,7 @@ export class ChatBubble {
     }
 
     // ── Text ──────────────────────────────────────────────────────────────────
-    ctx.font      = "bold 12px 'Comic Sans MS', cursive";
+    ctx.font      = `bold ${fontSize}px 'Comic Sans MS', cursive`;
     ctx.fillStyle = isStreamer ? '#FFF' : '#3D1F00';
     ctx.textAlign = 'center';
     lines.forEach((line, i) => {

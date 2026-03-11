@@ -6,6 +6,8 @@
  *   "Prepare ☕" — starts prep (only if machine is free and order is PENDING)
  *   "Serve 🍽️"  — serves the order (only if order is READY)
  *   "Close ✕"   — dismiss the panel
+ *
+ * All sizes are adaptive so the panel is finger-friendly on mobile screens.
  */
 
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
@@ -67,8 +69,9 @@ export class OrderPanel {
     const order = customer.order;
     if (!order) return;
 
-    const pw = 300;
-    const ph = 220;
+    // Adaptive panel width: 85% of canvas up to 340px
+    const pw = Math.min(canvasWidth * 0.85, 340);
+    const ph = 240;
     const px = (canvasWidth  - pw) / 2;
     const py = (canvasHeight - ph) / 2 - 30;
 
@@ -88,29 +91,29 @@ export class OrderPanel {
     ctx.fill();
     ctx.stroke();
 
-    // ── Close button ─────────────────────────────────────────────────────────
-    const closeSize = 26;
-    const closeX    = px + pw - closeSize - 8;
-    const closeY    = py + 8;
+    // ── Close button — minimum 44×44px touch target ───────────────────────────
+    const closeSize = 44;
+    const closeX    = px + pw - closeSize - 4;
+    const closeY    = py + 4;
     this._btnClose  = { x: closeX, y: closeY, w: closeSize, h: closeSize };
 
     ctx.fillStyle   = '#FF6B6B';
     ctx.strokeStyle = '#CC3333';
     ctx.lineWidth   = 2;
-    _roundRect(ctx, closeX, closeY, closeSize, closeSize, 6);
+    _roundRect(ctx, closeX, closeY, closeSize, closeSize, 8);
     ctx.fill();
     ctx.stroke();
 
-    ctx.font      = "bold 14px 'Comic Sans MS', cursive";
+    ctx.font      = "bold 16px 'Comic Sans MS', cursive";
     ctx.fillStyle = '#FFF';
     ctx.textAlign = 'center';
-    ctx.fillText('✕', closeX + closeSize / 2, closeY + 18);
+    ctx.fillText('✕', closeX + closeSize / 2, closeY + closeSize / 2 + 6);
 
     // ── Customer name + emoji ─────────────────────────────────────────────────
     ctx.font      = "bold 18px 'Comic Sans MS', cursive";
     ctx.fillStyle = '#3D1F00';
     ctx.textAlign = 'center';
-    ctx.fillText(`${customer.emoji} ${customer.name}`, px + pw / 2, py + 38);
+    ctx.fillText(`${customer.emoji} ${customer.name}`, px + pw / 2, py + 44);
 
     // Streamer badge
     if (customer.isStreamer) {
@@ -121,67 +124,66 @@ export class OrderPanel {
       ctx.fillStyle   = '#FF6B9D';
       ctx.strokeStyle = '#CC3D6B';
       ctx.lineWidth   = 1.5;
-      _roundRect(ctx, badgeX, py + 46, badgeW, 18, 5);
+      _roundRect(ctx, badgeX, py + 50, badgeW, 18, 5);
       ctx.fill();
       ctx.stroke();
       ctx.fillStyle = '#FFF';
-      ctx.fillText(`📱 ${customer.platform}`, px + pw / 2, py + 58);
+      ctx.fillText(`📱 ${customer.platform}`, px + pw / 2, py + 62);
     }
 
     // ── Order item ────────────────────────────────────────────────────────────
-    const itemY = customer.isStreamer ? py + 84 : py + 68;
+    const itemY = customer.isStreamer ? py + 88 : py + 72;
     ctx.font      = "22px serif";
     ctx.textAlign = 'center';
     ctx.fillText(order.item.emoji, px + pw / 2, itemY);
 
-    ctx.font      = "bold 14px 'Comic Sans MS', cursive";
+    ctx.font      = "bold 15px 'Comic Sans MS', cursive";
     ctx.fillStyle = '#3D1F00';
     ctx.fillText(order.item.name, px + pw / 2, itemY + 22);
 
-    ctx.font      = "12px 'Comic Sans MS', cursive";
+    ctx.font      = "13px 'Comic Sans MS', cursive";
     ctx.fillStyle = '#888';
     ctx.fillText(`价格: $${order.item.price}  小费: $${customer.tip}`, px + pw / 2, itemY + 42);
 
     // ── Status text ───────────────────────────────────────────────────────────
-    const statusY = itemY + 64;
-    ctx.font      = "12px 'Comic Sans MS', cursive";
+    const statusY = itemY + 62;
+    ctx.font      = "13px 'Comic Sans MS', cursive";
     ctx.fillStyle = order.status === 'READY' ? '#4CAF50' : '#888';
     const statusLabel = { PENDING: '等待制作…', PREPARING: '制作中…', READY: '✅ 已完成！', SERVED: '已上菜' };
     ctx.fillText(statusLabel[order.status] ?? '', px + pw / 2, statusY);
 
-    // ── Buttons ───────────────────────────────────────────────────────────────
-    const btnY  = py + ph - 44;
-    const btnH  = 34;
-    const btnW  = 110;
-    const gap   = 16;
-    const totalW = btnW * 2 + gap;
-    const btnStartX = px + (pw - totalW) / 2;
+    // ── Buttons — minimum 52px height, side-by-side, each ~45% of panel width ─
+    const btnH      = 52;
+    const btnW      = Math.floor((pw - 24) * 0.47);  // ~45% each with gap
+    const gap       = pw - 16 - btnW * 2;            // remaining space as gap
+    const btnY      = py + ph - btnH - 10;
+    const btnStartX = px + 8;
 
-    // Prepare button — shown only if machine free and order is PENDING
+    // Prepare button
     const canPrepare = orderSystem.isMachineFree && order.status === 'PENDING';
     this._btnPrepare = { x: btnStartX, y: btnY, w: btnW, h: btnH };
     ctx.fillStyle   = canPrepare ? '#FF9800' : '#CCC';
     ctx.strokeStyle = canPrepare ? '#E65100' : '#999';
     ctx.lineWidth   = 2;
-    _roundRect(ctx, btnStartX, btnY, btnW, btnH, 8);
+    _roundRect(ctx, btnStartX, btnY, btnW, btnH, 10);
     ctx.fill();
     ctx.stroke();
-    ctx.font      = "bold 13px 'Comic Sans MS', cursive";
+    ctx.font      = "bold 16px 'Comic Sans MS', cursive";
     ctx.fillStyle = canPrepare ? '#FFF' : '#888';
-    ctx.fillText('Prepare ☕', btnStartX + btnW / 2, btnY + 22);
+    ctx.fillText('Prepare ☕', btnStartX + btnW / 2, btnY + btnH / 2 + 6);
 
-    // Serve button — shown only if order is READY
-    const canServe   = order.status === 'READY';
-    const serveBtnX  = btnStartX + btnW + gap;
-    this._btnServe   = { x: serveBtnX, y: btnY, w: btnW, h: btnH };
+    // Serve button
+    const canServe  = order.status === 'READY';
+    const serveBtnX = btnStartX + btnW + gap;
+    this._btnServe  = { x: serveBtnX, y: btnY, w: btnW, h: btnH };
     ctx.fillStyle   = canServe ? '#4CAF50' : '#CCC';
     ctx.strokeStyle = canServe ? '#2E7D32' : '#999';
     ctx.lineWidth   = 2;
-    _roundRect(ctx, serveBtnX, btnY, btnW, btnH, 8);
+    _roundRect(ctx, serveBtnX, btnY, btnW, btnH, 10);
     ctx.fill();
     ctx.stroke();
     ctx.fillStyle = canServe ? '#FFF' : '#888';
-    ctx.fillText('Serve 🍽️', serveBtnX + btnW / 2, btnY + 22);
+    ctx.fillText('Serve 🍽️', serveBtnX + btnW / 2, btnY + btnH / 2 + 6);
 
     ctx.restore();
   }
