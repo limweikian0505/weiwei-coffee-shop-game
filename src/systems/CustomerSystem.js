@@ -187,12 +187,9 @@ export class CustomerSystem {
         customer = this._makeCustomer({ name, color, emoji: '😊', groupId });
       }
 
-      // Spawn position: left edge, Y staggered by 30px for group members
-      const floorTop    = this.canvasH * 0.30;
-      const floorBottom = this.canvasH - 100;
-      const baseY       = floorTop + Math.random() * (floorBottom - floorTop);
-      customer.x       = -30;
-      customer.y       = baseY + i * 30;
+      // Spawn position: door on the left side, stagger Y slightly for group members
+      customer.x       = this.canvasW * 0.08;
+      customer.y       = this.canvasH * 0.38 + i * 28;
       customer.targetX  = table.x - 60;
       customer.targetY  = table.y;
 

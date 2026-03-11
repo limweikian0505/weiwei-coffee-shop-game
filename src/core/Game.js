@@ -29,6 +29,7 @@ import { MENU_ITEMS }        from '../data/MenuData.js';
 import { UPGRADES }          from '../data/UpgradeData.js';
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
 import { setupOrientationHandler } from '../utils/orientation.js';
+import { SaveSystem }        from './SaveSystem.js';
 
 class Game {
   constructor() {
@@ -94,6 +95,11 @@ class Game {
     this._isMuted        = false;
     this._btnUpgrade     = null;
     this._btnMute        = null;
+    this._btnSave        = null;
+    this._btnReset       = null;
+
+    // ── Load save ─────────────────────────────────────────────────────────────
+    SaveSystem.load(this);
 
     // ── Input ─────────────────────────────────────────────────────────────────
     this.canvas.addEventListener('click', (e) => this._onClick(e));
@@ -119,6 +125,13 @@ class Game {
         this._onClick({ clientX: t.clientX, clientY: t.clientY });
       }
     }, { passive: false });
+
+    // ── Auto-save when player switches away ───────────────────────────────────
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden') {
+        SaveSystem.save(this);
+      }
+    });
 
     this._loop = new GameLoop(this);
   }
@@ -167,13 +180,20 @@ class Game {
 
     this.cafeRenderer.render(ctx, this.daySystem.getSkyTint());
 
-    for (const table of this.tables) {
-      this.tableRenderer.render(ctx, table);
-    }
+    // ── Depth-sorted rendering (painter's algorithm for isometric view) ────────
+    const renderables = [
+      ...this.tables.map((t) => ({ type: 'table', obj: t, sortY: t.y })),
+      ...this.customerSystem.customers.map((c) => ({ type: 'customer', obj: c, sortY: c.y })),
+    ];
+    renderables.sort((a, b) => a.sortY - b.sortY);
 
-    for (const customer of this.customerSystem.customers) {
-      this.customerRenderer.render(ctx, customer, W);
-      this.chatBubble.render(ctx, customer, W);
+    for (const r of renderables) {
+      if (r.type === 'table') {
+        this.tableRenderer.render(ctx, r.obj, H);
+      } else {
+        this.customerRenderer.render(ctx, r.obj, W, H);
+        this.chatBubble.render(ctx, r.obj, W);
+      }
     }
 
     this.orderSystem.render(ctx, W, H);
@@ -241,6 +261,16 @@ class Game {
       this._toggleMute();
       return;
     }
+    if (this._btnSave && _hit(this._btnSave, mx, my)) {
+      SaveSystem.save(this);
+      this.hud.showToast('✅ 游戏已保存！');
+      return;
+    }
+    if (this._btnReset && _hit(this._btnReset, mx, my)) {
+      SaveSystem.reset();
+      this.hud.showToast('🔄 存档已重置');
+      return;
+    }
 
     if (this.orderPanel.visible) {
       const action = this.orderPanel.handleClick(mx, my);
@@ -301,8 +331,9 @@ class Game {
     ctx.textAlign = 'center';
     ctx.fillText('🏪 升级', bx + bw / 2, by + bh / 2 + btnFontSize * 0.38);
 
-    const mw  = Math.max(40, H * 0.12);
-    const mx2 = bx + bw + 6;
+    // Mute button
+    const mw  = Math.max(34, H * 0.10);
+    const mx2 = bx + bw + 5;
     this._btnMute = { x: mx2, y: by, w: mw, h: bh };
     ctx.fillStyle   = this._isMuted ? '#666' : '#4CAF50';
     ctx.strokeStyle = this._isMuted ? '#444' : '#2E7D32';
@@ -311,6 +342,30 @@ class Game {
     ctx.stroke();
     ctx.fillStyle = '#FFF';
     ctx.fillText(this._isMuted ? '🔇' : '🔊', mx2 + mw / 2, by + bh / 2 + btnFontSize * 0.38);
+
+    // Save button 💾
+    const sw      = Math.max(34, H * 0.10);
+    const saveBtnX = mx2 + mw + 5;
+    this._btnSave = { x: saveBtnX, y: by, w: sw, h: bh };
+    ctx.fillStyle   = '#1976D2';
+    ctx.strokeStyle = '#0D47A1';
+    _roundRect(ctx, saveBtnX, by, sw, bh, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFF';
+    ctx.fillText('💾', saveBtnX + sw / 2, by + bh / 2 + btnFontSize * 0.38);
+
+    // Reset button 🔄
+    const rw        = Math.max(34, H * 0.10);
+    const resetBtnX = saveBtnX + sw + 5;
+    this._btnReset = { x: resetBtnX, y: by, w: rw, h: bh };
+    ctx.fillStyle   = '#757575';
+    ctx.strokeStyle = '#424242';
+    _roundRect(ctx, resetBtnX, by, rw, bh, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#FFF';
+    ctx.fillText('🔄', resetBtnX + rw / 2, by + bh / 2 + btnFontSize * 0.38);
 
     ctx.restore();
   }
@@ -347,6 +402,8 @@ class Game {
       const item = MENU_ITEMS.find((m) => m.id === effect.unlockMenuItem);
       if (item) item.unlocked = true;
     }
+
+    SaveSystem.save(this);
   }
 
   _addTable() {
@@ -392,6 +449,7 @@ class Game {
     this.goalSystem.resetForNewDay();
     this.daySystem.startNewDay();
     audioManager.play('new_day');
+    SaveSystem.save(this);
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
