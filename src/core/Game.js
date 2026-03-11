@@ -368,6 +368,7 @@ class Game {
       ? (stats.totalStars / stats.customersServed).toFixed(1)
       : '0.0';
 
+    // Finalize the 'no_angry' goal at end of day (can't be done mid-day)
     const goals = this.goalSystem.getDailyGoals();
     const noAngryGoal = goals.find((g) => g.id === 'no_angry');
     if (noAngryGoal) {
