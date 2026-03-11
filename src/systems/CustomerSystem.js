@@ -187,9 +187,9 @@ export class CustomerSystem {
         customer = this._makeCustomer({ name, color, emoji: '😊', groupId });
       }
 
-      // Spawn position: off the left edge on the street, stagger Y slightly for group members
+      // Spawn position: off the left edge near the entrance door, stagger Y slightly for group members
       customer.x       = this.canvasW * -0.05;
-      customer.y       = this.canvasH * 0.50 + i * 28;
+      customer.y       = this.canvasH * 0.54 + i * 28;
       customer.targetX  = table.x - 80;
       customer.targetY  = table.y;
 

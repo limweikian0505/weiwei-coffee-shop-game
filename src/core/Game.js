@@ -46,8 +46,8 @@ class Game {
     const H = this.H;
 
     this.tables = [
-      new Table(1, W * 0.38, H * 0.52, 'round2'),
-      new Table(2, W * 0.62, H * 0.55, 'square4'),
+      new Table(1, W * 0.30, H * 0.58, 'round2'),
+      new Table(2, W * 0.55, H * 0.62, 'square4'),
     ];
 
     this.economySystem    = new EconomySystem();
@@ -486,10 +486,10 @@ class Game {
     }
     // Reposition tables so they follow the new layout on orientation change
     if (this.tables && this.tables.length >= 2) {
-      this.tables[0].x = cssW * 0.38;
-      this.tables[0].y = cssH * 0.52;
-      this.tables[1].x = cssW * 0.62;
-      this.tables[1].y = cssH * 0.55;
+      this.tables[0].x = cssW * 0.30;
+      this.tables[0].y = cssH * 0.58;
+      this.tables[1].x = cssW * 0.55;
+      this.tables[1].y = cssH * 0.62;
     }
   }
 
