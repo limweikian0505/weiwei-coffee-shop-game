@@ -86,6 +86,12 @@ export class Customer {
 
     // Sparkle timer for streamers
     this.sparkleTimer = 0;
+
+    // Group ID — customers with the same groupId came together
+    this.groupId = options.groupId ?? null;
+
+    // Angry indicator — set to true once the "almost out of patience" message fires
+    this._angryShown = false;
   }
 
   // ─── Convenience ────────────────────────────────────────────────────────────
@@ -182,6 +188,12 @@ export class Customer {
             if (q) this.say(q, 3);
           }
         }
+        // Trigger angry message once when patience drops below 20%
+        // (Progress bar turns red at 30% — these are intentionally different thresholds.)
+        if (!this._angryShown && this.stateTimer < this.patience * 0.2) {
+          this._angryShown = true;
+          this.say('😤 等不及了！', 4);
+        }
         if (this.stateTimer <= 0) {
           // Ran out of patience — leave without paying
           this.money = 0;
@@ -189,7 +201,7 @@ export class Customer {
           if (this.assignedTable && this.assignedSeat >= 0) {
             this.assignedTable.vacate(this.assignedSeat);
           }
-          this._startLeaving();
+          this._startLeaving('😠 服务太差了！');
         }
         break;
 
@@ -266,11 +278,11 @@ export class Customer {
   }
 
   /** Set target to the right exit edge so the customer walks out. */
-  _startLeaving() {
+  _startLeaving(msg = '拜拜！👋') {
     this.targetX = this.canvasWidth + 40;
     this.targetY = this.y;
     this._enterState(STATE.LEAVING, 0);
-    this.say('拜拜！👋', 2);
+    this.say(msg, 2);
   }
 
   /** Called by OrderSystem when the player serves this customer's order. */

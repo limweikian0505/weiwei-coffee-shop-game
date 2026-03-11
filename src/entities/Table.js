@@ -19,6 +19,9 @@ export class Table {
 
     // Build seat list based on table type
     this.seats = Table._buildSeats(type);
+
+    // groupId of the customers currently occupying this table (null when empty)
+    this.groupId = null;
   }
 
   // ─── Static helpers ────────────────────────────────────────────────────────
@@ -52,6 +55,21 @@ export class Table {
     return this.seats.some((s) => !s.occupied);
   }
 
+  /**
+   * Returns true when the table can accept a customer with the given groupId.
+   * - Completely empty tables are available to any group.
+   * - Partially occupied tables are only available to the same group.
+   * @param {string|null} groupId
+   */
+  isAvailableForGroup(groupId) {
+    const hasFreeSeat = this.seats.some((s) => !s.occupied);
+    if (!hasFreeSeat) return false;
+    // Fully empty — anyone can sit
+    if (this.groupId === null) return true;
+    // Partially occupied — only the same group
+    return this.groupId === groupId;
+  }
+
   /** Returns the index of the first free seat, or -1 if none. */
   getSeat() {
     return this.seats.findIndex((s) => !s.occupied);
@@ -66,6 +84,10 @@ export class Table {
     if (idx < 0 || idx >= this.seats.length) return;
     this.seats[idx].occupied = true;
     this.seats[idx].customer = customer;
+    // Lock the table to this customer's group when first person sits down
+    if (this.groupId === null) {
+      this.groupId = customer.groupId ?? null;
+    }
   }
 
   /**
@@ -76,6 +98,10 @@ export class Table {
     if (idx < 0 || idx >= this.seats.length) return;
     this.seats[idx].occupied = false;
     this.seats[idx].customer = null;
+    // Reset groupId when the table is completely empty
+    if (this.seats.every((s) => !s.occupied)) {
+      this.groupId = null;
+    }
   }
 
   /** World-space X of a given seat index. */

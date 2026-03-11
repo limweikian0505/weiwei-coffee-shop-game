@@ -30,6 +30,7 @@ export class CustomerSystem {
     this.customers    = [];
     this._spawnTimer  = 4; // first customer arrives after 4 s
     this._spawnDelay  = 8 + Math.random() * 4;
+    this._groupSeq    = 0; // counter for unique group IDs
 
     /** Callback fired when a streamer spawns — used by Game for the banner. */
     this.onStreamerSpawn = null;
@@ -71,8 +72,11 @@ export class CustomerSystem {
   _trySpawn() {
     if (this.customers.length >= 8) return; // max customers on screen
 
-    // Find an available table + seat
-    const table = this.tables.find((t) => t.isAvailable());
+    // Each customer arrives alone — assign a unique group ID
+    const groupId = `group_${++this._groupSeq}`;
+
+    // Find an available table + seat (must be empty or same group)
+    const table = this.tables.find((t) => t.isAvailableForGroup(groupId));
     if (!table) return; // no room — customer doesn't enter
 
     const seatIdx = table.getSeat();
@@ -92,6 +96,7 @@ export class CustomerSystem {
         quotes      : [...data.quotes],
         platform    : data.platform,
         canvasWidth : this.canvasW,
+        groupId,
       });
       customer.sparkleTimer = 5; // golden sparkle on entry
       if (this.onStreamerSpawn) this.onStreamerSpawn(customer);
@@ -106,12 +111,13 @@ export class CustomerSystem {
         tip         : data.tip,
         quotes      : [...data.quotes],
         canvasWidth : this.canvasW,
+        groupId,
       });
     } else {
       // Normal customer
       const name  = NORMAL_NAMES[Math.floor(Math.random() * NORMAL_NAMES.length)];
       const color = PASTEL_COLORS[Math.floor(Math.random() * PASTEL_COLORS.length)];
-      customer = new Customer({ name, color, emoji: '😊', canvasWidth: this.canvasW });
+      customer = new Customer({ name, color, emoji: '😊', canvasWidth: this.canvasW, groupId });
     }
 
     // Spawn position: left edge, random Y in the cafe floor area

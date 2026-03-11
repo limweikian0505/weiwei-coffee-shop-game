@@ -76,7 +76,7 @@ export class CustomerRenderer {
 
     // ── Waiting indicator ─────────────────────────────────────────────────────
     if (state === 'WAITING') {
-      this._drawWaitingIndicator(ctx, x, y - 30);
+      this._drawWaitingIndicator(ctx, x, y - 30, customer);
     }
 
     ctx.restore();
@@ -103,12 +103,39 @@ export class CustomerRenderer {
     ctx.fillText(name, cx, cy + 11);
   }
 
-  _drawWaitingIndicator(ctx, cx, cy) {
-    // Pulsing "!" mark to indicate the customer is waiting for service
+  _drawWaitingIndicator(ctx, cx, cy, customer) {
+    // ── Patience progress bar ─────────────────────────────────────────────────
+    const barW   = 40;
+    const barH   = 7;
+    const barX   = cx - barW / 2;
+    const barY   = cy - 12; // positions bar at customer.y - 42 (cy = y - 30)
+    const ratio  = Math.max(0, Math.min(1, customer.stateTimer / customer.patience));
+
+    // Background (light red)
+    ctx.fillStyle = '#FFCCCC';
+    _roundRect(ctx, barX, barY, barW, barH, 3);
+    ctx.fill();
+
+    // Fill colour based on remaining patience
+    let fillColor;
+    if (ratio > 0.5) {
+      fillColor = '#66BB6A'; // green
+    } else if (ratio >= 0.3) {
+      fillColor = '#FFA726'; // orange
+    } else {
+      fillColor = '#EF5350'; // red
+    }
+    if (ratio > 0) {
+      ctx.fillStyle = fillColor;
+      _roundRect(ctx, barX, barY, barW * ratio, barH, 3);
+      ctx.fill();
+    }
+
+    // "!" mark above the bar
     ctx.font      = "bold 16px 'Comic Sans MS', cursive";
     ctx.fillStyle = '#FF4444';
     ctx.textAlign = 'center';
-    ctx.fillText('!', cx, cy);
+    ctx.fillText('!', cx, barY - 2);
   }
 
   _drawSparkles(ctx, cx, cy, timer) {
