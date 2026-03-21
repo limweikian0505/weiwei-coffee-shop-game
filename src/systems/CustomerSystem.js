@@ -11,6 +11,11 @@
  *  - Max 8 customers on screen at once
  *  - If no table has enough room for the group, no one enters
  *  - spawnEnabled = false prevents new spawns (e.g. CLOSING phase)
+ *
+ * Tile-based movement (Phase 1):
+ *  - Each spawned customer receives a TileMap reference and a BFS tile path
+ *    from the entrance tile to the tile nearest their assigned table.
+ *  - The off-screen entry/exit positions are derived from TileMap helpers.
  */
 
 import { Customer, STATE } from '../entities/Customer.js';
@@ -22,18 +27,20 @@ import {
 
 export class CustomerSystem {
   /**
-   * @param {Table[]}  tables  - Array of Table instances
-   * @param {number}   canvasH - Canvas height (for spawn Y range)
-   * @param {number}   canvasW - Canvas width (for exit target calculation)
+   * @param {Table[]}   tables   - Array of Table instances
+   * @param {number}    canvasH  - Canvas height (CSS pixels)
+   * @param {number}    [canvasW=1280] - Canvas width (CSS pixels)
+   * @param {TileMap|null} [tileMap=null] - TileMap for tile-based movement
    */
-  constructor(tables, canvasH, canvasW = 1280) {
-    this.tables       = tables;
-    this.canvasH      = canvasH;
-    this.canvasW      = canvasW;
-    this.customers    = [];
-    this._spawnTimer  = 4; // first customer arrives after 4 s
-    this._spawnDelay  = 8 + Math.random() * 4;
-    this._groupSeq    = 0; // counter for unique group IDs
+  constructor(tables, canvasH, canvasW = 1280, tileMap = null) {
+    this.tables      = tables;
+    this.canvasH     = canvasH;
+    this.canvasW     = canvasW;
+    this.tileMap     = tileMap;
+    this.customers   = [];
+    this._spawnTimer = 4; // first customer arrives after 4 s
+    this._spawnDelay = 8 + Math.random() * 4;
+    this._groupSeq   = 0; // counter for unique group IDs
 
     /** Set false to block new spawns (e.g. CLOSING / SUMMARY phase). */
     this.spawnEnabled = true;
@@ -112,7 +119,7 @@ export class CustomerSystem {
     if (this.customers.length >= 8) return;
 
     // Decide if this is a streamer or special customer (always single)
-    const typeRoll = Math.random();
+    const typeRoll   = Math.random();
     const isStreamer = typeRoll < 0.10;
     const isSpecial  = !isStreamer && typeRoll < 0.15;
 
@@ -127,6 +134,11 @@ export class CustomerSystem {
     // Find a table with enough free seats for the whole group
     const table = this.tables.find((t) => t.isAvailableForGroup(groupId, groupSize));
     if (!table) return; // no room
+
+    // Compute the tile approach position for this table (used for all group members).
+    const approachTile = this.tileMap
+      ? this.tileMap.nearestWalkableTile(table.x, table.y)
+      : null;
 
     // Build group members
     const newCustomers = [];
@@ -187,11 +199,34 @@ export class CustomerSystem {
         customer = this._makeCustomer({ name, color, emoji: '😊', groupId });
       }
 
-      // Spawn position: off the left edge near the entrance door, stagger Y slightly for group members
-      customer.x       = this.canvasW * -0.05;
-      customer.y       = this.canvasH * 0.54 + i * 28;
-      customer.targetX  = table.x - 80;
-      customer.targetY  = table.y;
+      // ── Position and tile path ─────────────────────────────────────────────
+      if (this.tileMap && approachTile) {
+        // Spawn just off the left edge at the entrance row.
+        const spawnPos = this.tileMap.getSpawnWorldPos();
+        customer.x = spawnPos.x;
+        // Stagger Y slightly for group members so they don't overlap.
+        customer.y = spawnPos.y + i * Math.max(20, this.tileMap.tileH * 0.35);
+
+        // Inject the TileMap so the customer can build its own leave path later.
+        customer.tileMap = this.tileMap;
+
+        // BFS path from entrance tile to the tile nearest the table.
+        const entrance = this.tileMap.getEntranceTile();
+        customer.tilePath = this.tileMap.findPath(
+          entrance.tx, entrance.ty,
+          approachTile.tx, approachTile.ty,
+        );
+
+        // targetX/Y = approach tile centre (where the path ends).
+        customer.targetX = this.tileMap.tileCenterX(approachTile.tx);
+        customer.targetY = this.tileMap.tileCenterY(approachTile.ty);
+      } else {
+        // Fallback (no TileMap): original pixel-based positioning.
+        customer.x       = this.canvasW * -0.05;
+        customer.y       = this.canvasH * 0.54 + i * 28;
+        customer.targetX = table.x - 80;
+        customer.targetY = table.y;
+      }
 
       table.occupy(seatIdx, customer);
       customer.assignedTable = table;
@@ -212,7 +247,7 @@ export class CustomerSystem {
    * Returns special customer types that are eligible to spawn given current conditions.
    */
   _getEligibleSpecials() {
-    const rep = this.currentReputation;
+    const rep          = this.currentReputation;
     const cakeUnlocked = MENU_ITEMS.find((m) => m.id === 'cake')?.unlocked ?? false;
 
     return SPECIAL_CUSTOMERS.filter((data) => {

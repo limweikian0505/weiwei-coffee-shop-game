@@ -5,6 +5,7 @@
  */
 
 import { GameLoop }          from './GameLoop.js';
+import { TileMap }           from './TileMap.js';
 import { Table }             from '../entities/Table.js';
 import { CustomerSystem }    from '../systems/CustomerSystem.js';
 import { OrderSystem }       from '../systems/OrderSystem.js';
@@ -45,17 +46,27 @@ class Game {
     const W = this.W;
     const H = this.H;
 
-    this.tables = [
-      new Table(1, W * 0.30, H * 0.58, 'round2'),
-      new Table(2, W * 0.55, H * 0.62, 'square4'),
+    // ── Tile map (top-down grid foundation) ───────────────────────────────────
+    this.tileMap = new TileMap(W, H);
+
+    // Table tile positions — stored so _resize() can recompute pixel coords.
+    // Layout: two starting tables in the walkable floor area.
+    this._tableTiles = [
+      { tx: 3, ty: 3 }, // upper-left area
+      { tx: 7, ty: 3 }, // upper-centre area
     ];
+    this.tables = this._tableTiles.map((tile, idx) => {
+      const pos  = this.tileMap.tileToWorld(tile.tx, tile.ty);
+      const type = idx === 0 ? 'round2' : 'square4';
+      return new Table(idx + 1, pos.x, pos.y, type);
+    });
 
     this.economySystem    = new EconomySystem();
     this.orderSystem      = new OrderSystem();
     this.reputationSystem = new ReputationSystem();
     this.daySystem        = new DaySystem();
     this.goalSystem       = new GoalSystem();
-    this.customerSystem   = new CustomerSystem(this.tables, H, W);
+    this.customerSystem   = new CustomerSystem(this.tables, H, W, this.tileMap);
 
     this.upgradeShop = new UpgradeShop();
     this.daySummary  = new DaySummary();
@@ -83,7 +94,7 @@ class Game {
 
     this.upgradeShop.onBuy = (upgradeId) => this._applyUpgrade(upgradeId);
 
-    this.cafeRenderer     = new CafeRenderer(W, H);
+    this.cafeRenderer     = new CafeRenderer(W, H, this.tileMap);
     this.tableRenderer    = new TableRenderer();
     this.customerRenderer = new CustomerRenderer();
     this.chatBubble       = new ChatBubble();
@@ -180,7 +191,7 @@ class Game {
 
     this.cafeRenderer.render(ctx, this.daySystem.getSkyTint());
 
-    // ── Depth-sorted rendering (painter's algorithm for isometric view) ────────
+    // ── Depth-sorted rendering (painter's algorithm — back-to-front by Y) ──────
     const renderables = [
       ...this.tables.map((t) => ({ type: 'table', obj: t, sortY: t.y })),
       ...this.customerSystem.customers.map((c) => ({ type: 'customer', obj: c, sortY: c.y })),
@@ -407,15 +418,20 @@ class Game {
   }
 
   _addTable() {
-    const W = this.W;
-    const H = this.H;
     const n = this.tables.length;
-    const positions = [
-      [W * 0.42, H * 0.48],
-      [W * 0.68, H * 0.50],
+    // Pre-defined tile positions for additional tables.
+    const extraTiles = [
+      { tx: 3, ty: 6 }, // lower-left area
+      { tx: 7, ty: 6 }, // lower-centre area
     ];
-    const pos = positions[n - 2] ?? [W * 0.50 + n * 30, H * 0.52];
-    this.tables.push(new Table(n + 1, pos[0], pos[1], 'square4'));
+    const tile = extraTiles[n - 2] ?? { tx: 5 + (n - 4) * 2, ty: 5 };
+    this._tableTiles.push(tile);
+
+    const pos = this.tileMap
+      ? this.tileMap.tileToWorld(tile.tx, tile.ty)
+      : { x: this.W * 0.50, y: this.H * 0.52 };
+
+    this.tables.push(new Table(n + 1, pos.x, pos.y, 'square4'));
     this.customerSystem.tables = this.tables;
   }
 
@@ -480,16 +496,22 @@ class Game {
       this.cafeRenderer.w = cssW;
       this.cafeRenderer.h = cssH;
     }
+    if (this.tileMap) {
+      this.tileMap.resize(cssW, cssH);
+    }
     if (this.customerSystem) {
       this.customerSystem.canvasW = cssW;
       this.customerSystem.canvasH = cssH;
     }
-    // Reposition tables so they follow the new layout on orientation change
-    if (this.tables && this.tables.length >= 2) {
-      this.tables[0].x = cssW * 0.30;
-      this.tables[0].y = cssH * 0.58;
-      this.tables[1].x = cssW * 0.55;
-      this.tables[1].y = cssH * 0.62;
+    // Reposition tables to their tile-based pixel positions on the updated grid.
+    if (this.tileMap && this.tables && this._tableTiles) {
+      for (let i = 0; i < this.tables.length; i++) {
+        const tile = this._tableTiles[i];
+        if (!tile) continue;
+        const pos = this.tileMap.tileToWorld(tile.tx, tile.ty);
+        this.tables[i].x = pos.x;
+        this.tables[i].y = pos.y;
+      }
     }
   }
 

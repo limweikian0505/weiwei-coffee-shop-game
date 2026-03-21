@@ -1,21 +1,24 @@
 /**
  * CustomerRenderer.js
- * Renders customers using GIF animations on the isometric cafe map.
+ * Renders customers using GIF animations on the top-down cafe map.
+ *
+ * Coordinates are used directly (no isometric Y-squash).
+ * Animation selection is driven by customer.isMoving and customer.facing.
  */
 
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
 
 const ASSET_PATHS = {
-  idle: 'Customer/Animation/idle.gif',
-  east: 'Customer/Animation/walking_east.gif',
-  west: 'Customer/Animation/walking_west.gif',
+  idle:  'Customer/Animation/idle.gif',
+  east:  'Customer/Animation/walking_east.gif',
+  west:  'Customer/Animation/walking_west.gif',
   north: 'Customer/Animation/walking_north.gif',
   south: 'Customer/Animation/walking_south.gif',
 };
 
 export class CustomerRenderer {
   constructor() {
-    this.images = {};
+    this.images  = {};
     this._loaded = false;
     this._loadAssets();
   }
@@ -23,67 +26,74 @@ export class CustomerRenderer {
   _loadAssets() {
     for (const [key, path] of Object.entries(ASSET_PATHS)) {
       const img = new Image();
-      img.src = path;
+      img.src   = path;
       this.images[key] = img;
     }
     this._loaded = true;
   }
 
   render(ctx, customer, canvasW = 360, canvasH = 640) {
+    // Top-down: use world coordinates directly, no isometric Y projection.
     const sx = customer.x;
-    const sy = customer.y * 0.55 + canvasH * 0.22;
+    const sy = customer.y;
 
     const {
       name, isStreamer, isSpecial, emoji, sparkleTimer, state,
       facing, isMoving,
     } = customer;
 
-    const bodyW = Math.max(28, canvasW * 0.085);
+    // Sprite size: larger than before since the floor is no longer vertically
+    // compressed — customers need to fill roughly one tile.
+    const bodyW = Math.max(40, Math.min(canvasW * 0.11, canvasH * 0.08));
     const bodyH = bodyW;
 
     ctx.save();
 
+    // ── Drop shadow ────────────────────────────────────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
-    ctx.ellipse(sx, sy + bodyH * 0.40, bodyW * 0.30, bodyH * 0.12, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + bodyH * 0.42, bodyW * 0.32, bodyH * 0.10, 0, 0, Math.PI * 2);
     ctx.fill();
 
+    // ── Sparkle effect for streamers ──────────────────────────────────────────
     if (isStreamer && sparkleTimer > 0) {
       this._drawSparkles(ctx, sx, sy, sparkleTimer, bodyW * 0.4);
     }
 
+    // ── Sprite ────────────────────────────────────────────────────────────────
     const key = isMoving ? (facing || 'south') : 'idle';
     const img = this.images[key];
 
-    if (img && img.complete) {
-      const drawW = bodyW;
-      const drawH = bodyH;
-      const drawX = sx - drawW / 2;
-      const drawY = sy - drawH * 0.78;
-      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+    if (img && img.complete && img.naturalWidth > 0) {
+      const drawX = sx - bodyW / 2;
+      const drawY = sy - bodyH * 0.85;
+      ctx.drawImage(img, drawX, drawY, bodyW, bodyH);
     } else {
-      ctx.fillStyle = '#FFB3BA';
+      // Fallback: simple coloured circle until GIFs load.
+      ctx.fillStyle = customer.color ?? '#FFB3BA';
       ctx.beginPath();
-      ctx.arc(sx, sy, bodyW * 0.28, 0, Math.PI * 2);
+      ctx.arc(sx, sy - bodyH * 0.35, bodyW * 0.30, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    const iconFont = Math.max(11, canvasW * 0.020);
-    ctx.font = `${iconFont}px serif`;
+    // ── Special icons ─────────────────────────────────────────────────────────
+    const iconFont = Math.max(12, canvasW * 0.022);
+    ctx.font      = `${iconFont}px serif`;
     ctx.textAlign = 'center';
 
     if (isSpecial && emoji === '👑') {
-      ctx.fillText('👑', sx, sy - bodyH * 0.72);
+      ctx.fillText('👑', sx, sy - bodyH * 0.82);
     }
-
     if (isStreamer) {
-      ctx.fillText('📱', sx + bodyW * 0.42, sy - bodyH * 0.20);
+      ctx.fillText('📱', sx + bodyW * 0.44, sy - bodyH * 0.22);
     }
 
-    this._drawNameTag(ctx, sx, sy + bodyH * 0.34, name, isStreamer, canvasW);
+    // ── Name tag ──────────────────────────────────────────────────────────────
+    this._drawNameTag(ctx, sx, sy + bodyH * 0.30, name, isStreamer, canvasW);
 
+    // ── Patience bar (shown while WAITING) ────────────────────────────────────
     if (state === 'WAITING') {
-      this._drawWaitingIndicator(ctx, sx, sy - bodyH * 0.72, customer, canvasW);
+      this._drawWaitingIndicator(ctx, sx, sy - bodyH * 0.82, customer, canvasW);
     }
 
     ctx.restore();
@@ -121,7 +131,7 @@ export class CustomerRenderer {
     ctx.fill();
 
     let fillColor;
-    if (ratio > 0.5)      fillColor = '#66BB6A';
+    if (ratio > 0.5)       fillColor = '#66BB6A';
     else if (ratio >= 0.3) fillColor = '#FFA726';
     else                   fillColor = '#EF5350';
 
