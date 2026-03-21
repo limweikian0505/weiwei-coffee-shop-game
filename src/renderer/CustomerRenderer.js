@@ -1,137 +1,93 @@
 /**
- * CustomerRenderer.js — Isometric 2.5D Chibi Style
- *
- * Draws customers as small isometric chibi characters.
- *
- * Coordinate transform (same perspective squish as TableRenderer):
- *   sx = customer.x
- *   sy = customer.y * 0.55 + canvasH * 0.22
- *
- * Walk-in animation (state === 'WALKING_IN'):
- *   - Vertical bounce on body: Math.sin(Date.now() * 0.008) * 3
- *   - Two small footstep ellipses below feet
- *
- * All existing features preserved:
- *   name tag, patience bar, streamer sparkles, crown/phone emoji, '!' indicator
+ * CustomerRenderer.js
+ * Renders customers using GIF animations on the isometric cafe map.
  */
 
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
 
+const ASSET_PATHS = {
+  idle: 'Customer/Animation/idle.gif',
+  east: 'Customer/Animation/walking_east.gif',
+  west: 'Customer/Animation/walking_west.gif',
+  north: 'Customer/Animation/walking_north.gif',
+  south: 'Customer/Animation/walking_south.gif',
+};
+
 export class CustomerRenderer {
-  /**
-   * @param {CanvasRenderingContext2D} ctx
-   * @param {Customer} customer
-   * @param {number} [canvasW=360]
-   * @param {number} [canvasH=640]
-   */
+  constructor() {
+    this.images = {};
+    this._loaded = false;
+    this._loadAssets();
+  }
+
+  _loadAssets() {
+    for (const [key, path] of Object.entries(ASSET_PATHS)) {
+      const img = new Image();
+      img.src = path;
+      this.images[key] = img;
+    }
+    this._loaded = true;
+  }
+
   render(ctx, customer, canvasW = 360, canvasH = 640) {
     const sx = customer.x;
     const sy = customer.y * 0.55 + canvasH * 0.22;
 
-    const { color, name, isStreamer, isSpecial, emoji, sparkleTimer, state } = customer;
+    const {
+      name, isStreamer, isSpecial, emoji, sparkleTimer, state,
+      facing, isMoving,
+    } = customer;
 
-    // Responsive radii
-    const bodyR = Math.max(12, canvasW * 0.042);
-    const headR = Math.max(9,  canvasW * 0.032);
-
-    // Walking bounce offset
-    const isWalking  = state === 'WALKING_IN';
-    const walkBounce = isWalking ? Math.sin(Date.now() * 0.008) * 3 : 0;
+    const bodyW = Math.max(28, canvasW * 0.085);
+    const bodyH = bodyW;
 
     ctx.save();
 
-    // ── Shadow (isometric floor shadow) ──────────────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
-    ctx.ellipse(sx, sy + bodyR * 1.05, bodyR * 0.78, bodyR * 0.28, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + bodyH * 0.40, bodyW * 0.30, bodyH * 0.12, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // ── Footsteps (walk animation) ────────────────────────────────────────────
-    if (isWalking) {
-      const phase  = Date.now() * 0.006;
-      const foot1A = Math.abs(Math.sin(phase));
-      const foot2A = Math.abs(Math.sin(phase + Math.PI));
-      ctx.fillStyle = `rgba(80,50,20,${0.25 * foot1A})`;
-      ctx.beginPath();
-      ctx.ellipse(sx - bodyR * 0.30, sy + bodyR * 1.10, bodyR * 0.22, bodyR * 0.10, 0, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = `rgba(80,50,20,${0.25 * foot2A})`;
-      ctx.beginPath();
-      ctx.ellipse(sx + bodyR * 0.30, sy + bodyR * 1.10, bodyR * 0.22, bodyR * 0.10, 0, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // ── Golden glow for streamers ─────────────────────────────────────────────
     if (isStreamer && sparkleTimer > 0) {
-      this._drawSparkles(ctx, sx, sy + walkBounce, sparkleTimer, bodyR);
-    }
-    if (isStreamer) {
-      ctx.shadowColor = '#FFD700';
-      ctx.shadowBlur  = 12;
+      this._drawSparkles(ctx, sx, sy, sparkleTimer, bodyW * 0.4);
     }
 
-    // ── Legs (two short lines) ────────────────────────────────────────────────
-    ctx.strokeStyle = this._darken(color);
-    ctx.lineWidth   = Math.max(2, bodyR * 0.18);
-    ctx.lineCap     = 'round';
-    for (const dx of [-bodyR * 0.28, bodyR * 0.28]) {
+    const key = isMoving ? (facing || 'south') : 'idle';
+    const img = this.images[key];
+
+    if (img && img.complete) {
+      const drawW = bodyW;
+      const drawH = bodyH;
+      const drawX = sx - drawW / 2;
+      const drawY = sy - drawH * 0.78;
+      ctx.drawImage(img, drawX, drawY, drawW, drawH);
+    } else {
+      ctx.fillStyle = '#FFB3BA';
       ctx.beginPath();
-      ctx.moveTo(sx + dx, sy + bodyR * 0.72 + walkBounce);
-      ctx.lineTo(sx + dx * 0.8, sy + bodyR + walkBounce);
-      ctx.stroke();
+      ctx.arc(sx, sy, bodyW * 0.28, 0, Math.PI * 2);
+      ctx.fill();
     }
-    ctx.lineCap = 'butt';
 
-    // ── Body (slightly squished oval — isometric look) ────────────────────────
-    ctx.fillStyle   = color;
-    ctx.strokeStyle = this._darken(color);
-    ctx.lineWidth   = 2.5;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy + bodyR * 0.12 + walkBounce, bodyR, bodyR * 0.72, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // ── Head ──────────────────────────────────────────────────────────────────
-    ctx.shadowBlur  = 0;
-    ctx.fillStyle   = '#FFDBB5';
-    ctx.strokeStyle = '#C49A6C';
-    ctx.lineWidth   = 2;
-    ctx.beginPath();
-    ctx.arc(sx, sy - headR * 0.78 + walkBounce, headR, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // ── Face emoji ────────────────────────────────────────────────────────────
-    const emojiFontSize = Math.max(10, canvasW * 0.017);
-    ctx.font      = `${emojiFontSize}px serif`;
+    const iconFont = Math.max(11, canvasW * 0.020);
+    ctx.font = `${iconFont}px serif`;
     ctx.textAlign = 'center';
-    ctx.fillText(emoji, sx, sy - headR * 0.78 + walkBounce + emojiFontSize * 0.38);
 
-    // ── Crown for VIP / special ───────────────────────────────────────────────
     if (isSpecial && emoji === '👑') {
-      ctx.font = `${emojiFontSize}px serif`;
-      ctx.fillText('👑', sx, sy - headR * 0.78 - headR + walkBounce);
+      ctx.fillText('👑', sx, sy - bodyH * 0.72);
     }
 
-    // ── Phone for streamers ───────────────────────────────────────────────────
     if (isStreamer) {
-      ctx.font = `${emojiFontSize}px serif`;
-      ctx.fillText('📱', sx + bodyR + 4, sy - headR * 0.3 + walkBounce);
+      ctx.fillText('📱', sx + bodyW * 0.42, sy - bodyH * 0.20);
     }
 
-    // ── Name tag ──────────────────────────────────────────────────────────────
-    ctx.shadowBlur = 0;
-    this._drawNameTag(ctx, sx, sy + bodyR + 8 + walkBounce, customer.name, isStreamer, canvasW);
+    this._drawNameTag(ctx, sx, sy + bodyH * 0.34, name, isStreamer, canvasW);
 
-    // ── Waiting indicator ─────────────────────────────────────────────────────
     if (state === 'WAITING') {
-      this._drawWaitingIndicator(ctx, sx, sy - headR * 0.78 - headR - 4 + walkBounce, customer, canvasW);
+      this._drawWaitingIndicator(ctx, sx, sy - bodyH * 0.72, customer, canvasW);
     }
 
     ctx.restore();
   }
-
-  // ─── Private helpers ─────────────────────────────────────────────────────────
 
   _drawNameTag(ctx, cx, cy, name, isStreamer, canvasW) {
     const padding  = 5;
@@ -181,24 +137,15 @@ export class CustomerRenderer {
     ctx.fillText('!', cx, barY - 1);
   }
 
-  _drawSparkles(ctx, cx, cy, timer, bodyR) {
+  _drawSparkles(ctx, cx, cy, timer, radius) {
     const count = 8;
     const angle = (timer * 2) % (Math.PI * 2);
     ctx.fillStyle = 'rgba(255,215,0,0.7)';
     ctx.font      = '12px serif';
     for (let i = 0; i < count; i++) {
       const a = angle + (i / count) * Math.PI * 2;
-      const r = bodyR + 8 + Math.sin(timer * 3 + i) * 5;
+      const r = radius + 8 + Math.sin(timer * 3 + i) * 5;
       ctx.fillText('✦', cx + Math.cos(a) * r, cy + Math.sin(a) * r);
     }
-  }
-
-  _darken(hex) {
-    let c = hex.replace('#', '');
-    if (c.length === 3) c = c.split('').map((ch) => ch + ch).join('');
-    const r = Math.max(0, parseInt(c.slice(0, 2), 16) - 50);
-    const g = Math.max(0, parseInt(c.slice(2, 4), 16) - 50);
-    const b = Math.max(0, parseInt(c.slice(4, 6), 16) - 50);
-    return `rgb(${r},${g},${b})`;
   }
 }
