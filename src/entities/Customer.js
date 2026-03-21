@@ -125,6 +125,13 @@ export class Customer {
           if (this.assignedTable && this.assignedSeat >= 0) {
             this.targetX = this.assignedTable.seatX(this.assignedSeat);
             this.targetY = this.assignedTable.seatY(this.assignedSeat);
+            // Navigate tile-by-tile to the seat so the customer doesn't clip
+            // through the table furniture to reach the other side.
+            if (this.tileMap) {
+              const from = this.tileMap.nearestWalkableTile(this.x, this.y);
+              const to   = this.tileMap.nearestWalkableTile(this.targetX, this.targetY);
+              this.tilePath = this.tileMap.findPath(from.tx, from.ty, to.tx, to.ty);
+            }
             this._enterState(STATE.SEATED, 2);
             this.say('嗯...看看菜单～', 3);
           } else {

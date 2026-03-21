@@ -5,7 +5,7 @@
  */
 
 import { GameLoop }          from './GameLoop.js';
-import { TileMap }           from './TileMap.js';
+import { TileMap, TILE }     from './TileMap.js';
 import { Table }             from '../entities/Table.js';
 import { CustomerSystem }    from '../systems/CustomerSystem.js';
 import { OrderSystem }       from '../systems/OrderSystem.js';
@@ -50,16 +50,18 @@ class Game {
     this.tileMap = new TileMap(W, H);
 
     // Table tile positions — stored so _resize() can recompute pixel coords.
-    // Layout: two starting tables in the walkable floor area.
+    // Layout: two starting tables with clear aisles between them and the counter.
     this._tableTiles = [
       { tx: 3, ty: 3 }, // upper-left area
-      { tx: 7, ty: 3 }, // upper-centre area
+      { tx: 9, ty: 3 }, // upper-right area (col 9 gives a clear corridor to counter)
     ];
     this.tables = this._tableTiles.map((tile, idx) => {
       const pos  = this.tileMap.tileToWorld(tile.tx, tile.ty);
       const type = idx === 0 ? 'round2' : 'square4';
-      return new Table(idx + 1, pos.x, pos.y, type);
+      return new Table(idx + 1, pos.x, pos.y, type, this.tileMap.tileW, this.tileMap.tileH);
     });
+    // Mark table tiles as impassable so customers path around furniture.
+    this._markTableTiles();
 
     this.economySystem    = new EconomySystem();
     this.orderSystem      = new OrderSystem();
@@ -200,7 +202,11 @@ class Game {
 
     for (const r of renderables) {
       if (r.type === 'table') {
-        this.tableRenderer.render(ctx, r.obj, H);
+        this.tableRenderer.render(
+          ctx, r.obj,
+          this.tileMap ? this.tileMap.tileW : 64,
+          this.tileMap ? this.tileMap.tileH : 64,
+        );
       } else {
         this.customerRenderer.render(ctx, r.obj, W, H);
         this.chatBubble.render(ctx, r.obj, W);
@@ -417,22 +423,34 @@ class Game {
     SaveSystem.save(this);
   }
 
+  /** Mark every placed table's tile as TILE.TABLE so BFS pathfinding avoids it. */
+  _markTableTiles() {
+    if (!this.tileMap) return;
+    for (const tile of this._tableTiles) {
+      if (tile) this.tileMap.setTile(tile.tx, tile.ty, TILE.TABLE);
+    }
+  }
+
   _addTable() {
-    const n = this.tables.length;
     // Pre-defined tile positions for additional tables.
+    // Lower-area positions mirror the upper starting tables for a balanced layout.
     const extraTiles = [
       { tx: 3, ty: 6 }, // lower-left area
-      { tx: 7, ty: 6 }, // lower-centre area
+      { tx: 9, ty: 6 }, // lower-right area
     ];
-    const tile = extraTiles[n - 2] ?? { tx: 5 + (n - 4) * 2, ty: 5 };
+    const tile = extraTiles[n - 2] ?? { tx: 5 + (n - 4) * 3, ty: 5 };
     this._tableTiles.push(tile);
 
     const pos = this.tileMap
       ? this.tileMap.tileToWorld(tile.tx, tile.ty)
       : { x: this.W * 0.50, y: this.H * 0.52 };
 
-    this.tables.push(new Table(n + 1, pos.x, pos.y, 'square4'));
+    this.tables.push(new Table(
+      n + 1, pos.x, pos.y, 'square4',
+      this.tileMap?.tileW ?? 64, this.tileMap?.tileH ?? 64,
+    ));
     this.customerSystem.tables = this.tables;
+    this._markTableTiles();
   }
 
   _showDaySummary() {
@@ -504,6 +522,7 @@ class Game {
       this.customerSystem.canvasH = cssH;
     }
     // Reposition tables to their tile-based pixel positions on the updated grid.
+    // Rebuild seat offsets to match the new tile dimensions.
     if (this.tileMap && this.tables && this._tableTiles) {
       for (let i = 0; i < this.tables.length; i++) {
         const tile = this._tableTiles[i];
@@ -511,6 +530,7 @@ class Game {
         const pos = this.tileMap.tileToWorld(tile.tx, tile.ty);
         this.tables[i].x = pos.x;
         this.tables[i].y = pos.y;
+        this.tables[i].rebuildSeats(this.tileMap.tileW, this.tileMap.tileH);
       }
     }
   }

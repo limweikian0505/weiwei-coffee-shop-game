@@ -25,6 +25,7 @@ export const TILE = {
   FLOOR:   1,
   DOOR:    2, // walkable — entrance / exit
   COUNTER: 3, // impassable — counter / bar
+  TABLE:   4, // impassable — furniture (set dynamically by Game.js)
 };
 
 /**
@@ -80,6 +81,22 @@ export class TileMap {
 
     this.tileW = this.gridW / COLS;
     this.tileH = this.gridH / ROWS;
+  }
+
+  // ─── Tile mutation ────────────────────────────────────────────────────────────
+
+  /**
+   * Overwrite a single tile's type.  Used by Game.js to mark furniture as
+   * impassable after placing tables.
+   *
+   * @param {number} tx - Tile column
+   * @param {number} ty - Tile row
+   * @param {number} type - TILE.* constant
+   */
+  setTile(tx, ty, type) {
+    if (tx >= 0 && ty >= 0 && tx < COLS && ty < ROWS) {
+      this.layout[ty][tx] = type;
+    }
   }
 
   // ─── Tile queries ─────────────────────────────────────────────────────────────

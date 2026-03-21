@@ -42,17 +42,22 @@ export class CustomerRenderer {
       facing, isMoving,
     } = customer;
 
-    // Sprite size: larger than before since the floor is no longer vertically
-    // compressed — customers need to fill roughly one tile.
-    const bodyW = Math.max(40, Math.min(canvasW * 0.11, canvasH * 0.08));
+    // Scale sprite to fill roughly one tile.  The formula targets ~12% of canvas
+    // height which on a typical phone (667 px) gives ~80 px — close to one tile.
+    const bodyW = Math.max(52, Math.min(canvasW * 0.14, canvasH * 0.12));
     const bodyH = bodyW;
+
+    // Sprite is drawn centred on the world position (top-down convention: the
+    // entity position is its centre, not its feet).
+    const drawX = sx - bodyW / 2;
+    const drawY = sy - bodyH / 2;
 
     ctx.save();
 
-    // ── Drop shadow ────────────────────────────────────────────────────────────
+    // ── Drop shadow (at feet — slightly below centre) ─────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.18)';
     ctx.beginPath();
-    ctx.ellipse(sx, sy + bodyH * 0.42, bodyW * 0.32, bodyH * 0.10, 0, 0, Math.PI * 2);
+    ctx.ellipse(sx, sy + bodyH * 0.44, bodyW * 0.30, bodyH * 0.08, 0, 0, Math.PI * 2);
     ctx.fill();
 
     // ── Sparkle effect for streamers ──────────────────────────────────────────
@@ -65,14 +70,12 @@ export class CustomerRenderer {
     const img = this.images[key];
 
     if (img && img.complete && img.naturalWidth > 0) {
-      const drawX = sx - bodyW / 2;
-      const drawY = sy - bodyH * 0.85;
       ctx.drawImage(img, drawX, drawY, bodyW, bodyH);
     } else {
       // Fallback: simple coloured circle until GIFs load.
       ctx.fillStyle = customer.color ?? '#FFB3BA';
       ctx.beginPath();
-      ctx.arc(sx, sy - bodyH * 0.35, bodyW * 0.30, 0, Math.PI * 2);
+      ctx.arc(sx, sy, bodyW * 0.30, 0, Math.PI * 2);
       ctx.fill();
     }
 
@@ -82,18 +85,18 @@ export class CustomerRenderer {
     ctx.textAlign = 'center';
 
     if (isSpecial && emoji === '👑') {
-      ctx.fillText('👑', sx, sy - bodyH * 0.82);
+      ctx.fillText('👑', sx, drawY - 2);
     }
     if (isStreamer) {
-      ctx.fillText('📱', sx + bodyW * 0.44, sy - bodyH * 0.22);
+      ctx.fillText('📱', sx + bodyW * 0.44, sy);
     }
 
-    // ── Name tag ──────────────────────────────────────────────────────────────
-    this._drawNameTag(ctx, sx, sy + bodyH * 0.30, name, isStreamer, canvasW);
+    // ── Name tag (below sprite) ───────────────────────────────────────────────
+    this._drawNameTag(ctx, sx, drawY + bodyH + 2, name, isStreamer, canvasW);
 
     // ── Patience bar (shown while WAITING) ────────────────────────────────────
     if (state === 'WAITING') {
-      this._drawWaitingIndicator(ctx, sx, sy - bodyH * 0.82, customer, canvasW);
+      this._drawWaitingIndicator(ctx, sx, drawY - 12, customer, canvasW);
     }
 
     ctx.restore();

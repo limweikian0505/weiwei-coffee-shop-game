@@ -4,9 +4,15 @@
  * Draws tables as flat, bird's-eye shapes aligned with the top-down tile grid.
  * Coordinates are used directly without any isometric projection or Y-squish.
  *
+ * Table and chair sizes are derived from the tile dimensions passed by Game.js
+ * so they scale consistently across different screen sizes.
+ *
+ * Chair positions follow table.seats offsets exactly, ensuring visual and
+ * logical positions match (customers always walk to where the chair is drawn).
+ *
  * Supported types:
  *   'round2'  — circular table with 2 chair circles (left & right)
- *   'square4' — rectangular table with 4 chair squares (N, S, E, W)
+ *   'square4' — rectangular table with 4 chair squares (N, S, W, E)
  *   'long6'   — elongated locked table (placeholder outline)
  */
 
@@ -14,41 +20,45 @@ export class TableRenderer {
   /**
    * @param {CanvasRenderingContext2D} ctx
    * @param {Table}  table
-   * @param {number} [canvasH=640]
+   * @param {number} [tileW=64] - tile width in CSS pixels
+   * @param {number} [tileH=64] - tile height in CSS pixels
    */
-  render(ctx, table, canvasH = 640) {
+  render(ctx, table, tileW = 64, tileH = 64) {
     // Use world coordinates directly — no isometric projection.
     const sx = table.x;
     const sy = table.y;
 
     switch (table.type) {
       case 'round2':
-        this._drawRound2(ctx, table, sx, sy, canvasH);
+        this._drawRound2(ctx, table, sx, sy, tileW, tileH);
         break;
       case 'square4':
-        this._drawSquare4(ctx, table, sx, sy, canvasH);
+        this._drawSquare4(ctx, table, sx, sy, tileW, tileH);
         break;
       case 'long6':
-        this._drawLong6(ctx, table, sx, sy);
+        this._drawLong6(ctx, table, sx, sy, tileW, tileH);
         break;
       default:
-        this._drawRound2(ctx, table, sx, sy, canvasH);
+        this._drawRound2(ctx, table, sx, sy, tileW, tileH);
     }
   }
 
   // ─── round2 ─────────────────────────────────────────────────────────────────
 
-  _drawRound2(ctx, table, sx, sy, canvasH) {
-    const r  = Math.max(18, canvasH * 0.030); // table radius
+  _drawRound2(ctx, table, sx, sy, tileW, tileH) {
+    const tileMin = Math.min(tileW, tileH);
+    const r       = tileMin * 0.36; // table radius ~36% of tile
+    const chairR  = tileMin * 0.20; // chair radius ~20% of tile
 
     ctx.save();
 
     // ── Chairs (drawn before table so table top is on top) ─────────────────────
+    // Chair positions come directly from table.seats to ensure visual positions
+    // match where customers actually stand.
     for (const seat of table.seats) {
-      // In the top-down layout the seat offsets are direct pixel deltas.
       const cx = sx + seat.ox;
       const cy = sy + seat.oy;
-      this._drawChair(ctx, cx, cy, seat.occupied, r * 0.45);
+      this._drawChair(ctx, cx, cy, seat.occupied, chairR);
     }
 
     // ── Drop shadow ────────────────────────────────────────────────────────────
@@ -70,13 +80,19 @@ export class TableRenderer {
     ctx.strokeStyle = 'rgba(255,220,120,0.30)';
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
-    ctx.arc(sx, sy, r * 0.62, 0, Math.PI * 2);
+    ctx.arc(sx, sy, r * 0.60, 0, Math.PI * 2);
     ctx.stroke();
+
+    // Centre highlight dot
+    ctx.fillStyle = 'rgba(255,240,180,0.25)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
 
     ctx.restore();
   }
 
-  /** Top-down circular chair. */
+  /** Top-down circular chair cushion. */
   _drawChair(ctx, cx, cy, occupied, r) {
     ctx.save();
 
@@ -95,29 +111,31 @@ export class TableRenderer {
     ctx.fill();
     ctx.stroke();
 
+    // Seat detail line
+    if (!occupied) {
+      ctx.strokeStyle = 'rgba(180,140,60,0.35)';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 
   // ─── square4 ────────────────────────────────────────────────────────────────
 
-  _drawSquare4(ctx, table, sx, sy, canvasH) {
-    const hw = Math.max(20, canvasH * 0.034); // half-width of table
+  _drawSquare4(ctx, table, sx, sy, tileW, tileH) {
+    const tileMin = Math.min(tileW, tileH);
+    const hw      = tileMin * 0.33; // half-width of table surface
+    const chairR  = tileMin * 0.20;
 
     ctx.save();
 
-    // ── Chairs at N / S / E / W ───────────────────────────────────────────────
-    // Position chairs outside the table boundary, scaled to canvasH.
-    const chairR   = hw * 0.45;
-    const chairGap = hw * 1.55; // distance from table centre to chair centre
-    const chairDefs = [
-      { ox: 0,        oy: -chairGap }, // North
-      { ox: 0,        oy:  chairGap }, // South
-      { ox: -chairGap, oy: 0        }, // West
-      { ox:  chairGap, oy: 0        }, // East
-    ];
-    for (let i = 0; i < chairDefs.length; i++) {
-      const occ = i < table.seats.length && table.seats[i].occupied;
-      this._drawChair(ctx, sx + chairDefs[i].ox, sy + chairDefs[i].oy, occ, chairR);
+    // ── Chairs at seat positions ───────────────────────────────────────────────
+    // Use table.seats offsets so drawn chairs match customer destination exactly.
+    for (const seat of table.seats) {
+      this._drawChair(ctx, sx + seat.ox, sy + seat.oy, seat.occupied, chairR);
     }
 
     // ── Drop shadow ────────────────────────────────────────────────────────────
@@ -146,16 +164,18 @@ export class TableRenderer {
 
   // ─── long6 (locked — placeholder) ───────────────────────────────────────────
 
-  _drawLong6(ctx, table, sx, sy) {
+  _drawLong6(ctx, table, sx, sy, tileW, tileH) {
+    const lw = tileW * 1.9;
+    const lh = tileH * 0.65;
     ctx.save();
     ctx.setLineDash([6, 4]);
     ctx.strokeStyle = '#999';
     ctx.lineWidth   = 3;
-    ctx.strokeRect(sx - 62, sy - 22, 124, 44);
+    ctx.strokeRect(sx - lw / 2, sy - lh / 2, lw, lh);
     ctx.restore();
 
     ctx.fillStyle = 'rgba(150,150,150,0.15)';
-    ctx.fillRect(sx - 62, sy - 22, 124, 44);
+    ctx.fillRect(sx - lw / 2, sy - lh / 2, lw, lh);
 
     ctx.font      = "bold 13px 'Comic Sans MS', cursive";
     ctx.fillStyle = '#888';
@@ -163,3 +183,4 @@ export class TableRenderer {
     ctx.fillText('🔒 解锁', sx, sy + 6);
   }
 }
+
