@@ -32,10 +32,14 @@ export class Table {
 
     switch (type) {
       case 'round2':
-        return makeSeats([[-30, 0], [30, 0]]);
+        // Left and right seats for a circular table (top-down).
+        return makeSeats([[-38, 0], [38, 0]]);
 
       case 'square4':
-        return makeSeats([[-25, -25], [25, -25], [-25, 25], [25, 25]]);
+        // N / S / E / W seats matching the top-down chair positions drawn by TableRenderer.
+        // The offsets are pixel distances from the table centre; they scale with canvasH
+        // but a fixed value of ~38px keeps customers clearly next to the table.
+        return makeSeats([[0, -38], [0, 38], [-38, 0], [38, 0]]);
 
       case 'long6':
         return makeSeats([
@@ -44,7 +48,7 @@ export class Table {
         ]);
 
       default:
-        return makeSeats([[-30, 0], [30, 0]]);
+        return makeSeats([[-38, 0], [38, 0]]);
     }
   }
 

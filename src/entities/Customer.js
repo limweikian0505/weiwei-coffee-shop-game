@@ -1,6 +1,17 @@
 /**
  * Customer.js
  * Full state-machine for a cafe customer.
+ *
+ * Movement model (Phase 1):
+ *   When `tilePath` is non-empty the customer advances tile-by-tile along the
+ *   BFS path provided by TileMap.  Each step targets the centre of the next
+ *   tile; once reached, that step is consumed and movement continues.
+ *
+ *   When `tilePath` is empty the customer moves directly toward `targetX /
+ *   targetY` (used for fine-grained seating and off-screen exit).
+ *
+ *   `_hasArrived()` returns true only when both the tile path is exhausted AND
+ *   the customer is within 2px of `targetX / targetY`.
  */
 
 import { getActiveMenuItems, HAPPY_QUOTES } from '../data/MenuData.js';
@@ -46,8 +57,14 @@ export class Customer {
     this.walkSpeed   = 120;
     this.canvasWidth = options.canvasWidth ?? 1280;
 
-    this.facing = 'south';
+    this.facing   = 'south';
     this.isMoving = false;
+
+    // ── Tile-based movement ────────────────────────────────────────────────────
+    /** Array of { tx, ty } tile steps to follow. Consumed front-to-back. */
+    this.tilePath = [];
+    /** TileMap instance — injected by CustomerSystem. */
+    this.tileMap  = null;
 
     this.state       = STATE.WALKING_IN;
     this.stateTimer  = 0;
@@ -55,9 +72,9 @@ export class Customer {
     this.assignedTable = null;
     this.assignedSeat  = -1;
 
-    this.order = null;
+    this.order    = null;
     this.patience = 60;
-    this.money = 0;
+    this.money    = 0;
 
     this.chatMessage = null;
     this.chatTimer   = 0;
@@ -69,7 +86,7 @@ export class Customer {
     this.earnedStars = 0;
     this.waitRatio   = 0;
 
-    this.onSound = null;
+    this.onSound       = null;
     this.tipMultiplier = 1.0;
   }
 
@@ -229,18 +246,45 @@ export class Customer {
     this.stateTimer = timerValue;
   }
 
+  // ─── Movement ─────────────────────────────────────────────────────────────────
+
   _move(dt) {
+    // ── Tile-path movement ─────────────────────────────────────────────────────
+    if (this.tileMap && this.tilePath.length > 0) {
+      const { tx, ty } = this.tilePath[0];
+      const wx = this.tileMap.tileCenterX(tx);
+      const wy = this.tileMap.tileCenterY(ty);
+      const dx = wx - this.x;
+      const dy = wy - this.y;
+      const dist = Math.hypot(dx, dy);
+
+      // Update facing direction.
+      this._updateFacing(dx, dy);
+      this.isMoving = dist >= 1;
+
+      if (dist < 2) {
+        // Snap to tile centre and consume this step.
+        this.x = wx;
+        this.y = wy;
+        this.tilePath.shift();
+        this.isMoving = this.tilePath.length > 0;
+        // Note: do NOT overwrite targetX/targetY here — the caller (_startLeaving,
+        // _trySpawn) has already set them to the desired final destination.
+      } else {
+        const step = this.walkSpeed * dt;
+        this.x += (dx / dist) * step;
+        this.y += (dy / dist) * step;
+      }
+      return;
+    }
+
+    // ── Direct targetX / targetY movement (seating & off-screen exit) ──────────
     const dx   = this.targetX - this.x;
     const dy   = this.targetY - this.y;
     const dist = Math.hypot(dx, dy);
 
     this.isMoving = dist >= 1;
-
-    if (Math.abs(dx) > Math.abs(dy)) {
-      this.facing = dx >= 0 ? 'east' : 'west';
-    } else if (Math.abs(dy) > 0.5) {
-      this.facing = dy >= 0 ? 'south' : 'north';
-    }
+    this._updateFacing(dx, dy);
 
     if (dist < 1) {
       this.x = this.targetX;
@@ -260,15 +304,40 @@ export class Customer {
     }
   }
 
+  /** Update `facing` based on movement delta. */
+  _updateFacing(dx, dy) {
+    if (Math.abs(dx) > Math.abs(dy)) {
+      this.facing = dx >= 0 ? 'east' : 'west';
+    } else if (Math.abs(dy) > 0.5) {
+      this.facing = dy >= 0 ? 'south' : 'north';
+    }
+  }
+
   _hasArrived() {
+    if (this.tilePath.length > 0) return false;
     return Math.hypot(this.targetX - this.x, this.targetY - this.y) < 2;
   }
 
   _startLeaving(msg = '拜拜！👋') {
-    this.targetX = this.canvasWidth * -0.08;
-    this.targetY = this.y;
-    this._enterState(STATE.LEAVING, 0);
     this.say(msg, 2);
+
+    if (this.tileMap) {
+      // Build a BFS tile path from the customer's current position back to the
+      // entrance tile, then continue to the off-screen exit world position.
+      const from     = this.tileMap.nearestWalkableTile(this.x, this.y);
+      const entrance = this.tileMap.getEntranceTile();
+      this.tilePath  = this.tileMap.findPath(from.tx, from.ty, entrance.tx, entrance.ty);
+      // After the tile path ends the customer walks directly to the exit.
+      const exitPos  = this.tileMap.getExitWorldPos();
+      this.targetX   = exitPos.x;
+      this.targetY   = exitPos.y;
+    } else {
+      // Fallback: move directly off the left edge.
+      this.targetX = this.canvasWidth * -0.08;
+      this.targetY = this.y;
+    }
+
+    this._enterState(STATE.LEAVING, 0);
   }
 
   receiveOrder() {
