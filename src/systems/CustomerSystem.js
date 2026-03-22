@@ -41,6 +41,9 @@ export class CustomerSystem {
     this._spawnTimer = 4; // first customer arrives after 4 s
     this._spawnDelay = 8 + Math.random() * 4;
     this._groupSeq   = 0; // counter for unique group IDs
+    // Alternates between entrance rows 4 and 5 for solo customers so that
+    // consecutive single arrivals don't all funnel through the same door tile.
+    this._entranceToggle = false;
 
     /** Set false to block new spawns (e.g. CLOSING / SUMMARY phase). */
     this.spawnEnabled = true;
@@ -196,10 +199,20 @@ export class CustomerSystem {
 
       // ── Position and tile path ─────────────────────────────────────────────
       if (this.tileMap) {
-        // Alternate entrance rows 4 and 5 (both are DOOR tiles) so group
-        // members spread out rather than all funnelling through the same tile.
+        // For solo customers, alternate entrance rows 4 and 5 so consecutive
+        // arrivals don't all funnel through the same door tile.
+        // For group members (i > 0), offset by member index so they spread out
+        // naturally without stacking on one tile.
         const entranceTx = this.tileMap.getEntranceTile().tx;
-        const entranceTy = 4 + (i % 2);
+        let entranceTy;
+        if (groupSize === 1) {
+          // Solo customer — toggle the entrance row each spawn.
+          entranceTy = this._entranceToggle ? 5 : 4;
+          this._entranceToggle = !this._entranceToggle;
+        } else {
+          // Group member — spread by index (leader on row 4, follower on row 5).
+          entranceTy = 4 + (i % 2);
+        }
 
         // Spawn just off the left edge at the chosen entrance row.
         customer.x = this.tileMap.getSpawnWorldPos().x;

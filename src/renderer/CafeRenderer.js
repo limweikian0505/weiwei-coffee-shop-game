@@ -175,8 +175,17 @@ export class CafeRenderer {
     ctx.lineWidth   = 2;
     ctx.strokeRect(px, py, tw, th);
     // Doorway gap indicator (lighter centre strip)
-    ctx.fillStyle = 'rgba(255,240,200,0.30)';
-    ctx.fillRect(px + tw * 0.2, py, tw * 0.6, th);
+    ctx.fillStyle = 'rgba(255,240,200,0.35)';
+    ctx.fillRect(px + tw * 0.15, py, tw * 0.70, th);
+    // Subtle vertical threshold lines on door edges for depth
+    ctx.strokeStyle = 'rgba(100,60,0,0.25)';
+    ctx.lineWidth   = 1;
+    ctx.beginPath();
+    ctx.moveTo(px + tw * 0.15, py);
+    ctx.lineTo(px + tw * 0.15, py + th);
+    ctx.moveTo(px + tw * 0.85, py);
+    ctx.lineTo(px + tw * 0.85, py + th);
+    ctx.stroke();
   }
 
   _drawCounterTile(ctx, px, py, tw, th, row, tm) {
@@ -308,7 +317,15 @@ export class CafeRenderer {
     ctx.font      = `bold ${fs}px serif`;
     ctx.fillStyle = '#FFD700';
     ctx.textAlign = 'center';
-    ctx.fillText('欢迎', mx + mw / 2, my + mh / 2 + fs * 0.35);
+    ctx.fillText('欢迎', mx + mw / 2, my + mh * 0.40 + fs * 0.35);
+
+    // Directional arrow pointing right (into the cafe) so it's immediately
+    // clear to new players that this is the entrance and which direction to go.
+    const arrowSize = Math.max(5, Math.min(mw * 0.32, mh * 0.18));
+    ctx.font      = `${arrowSize}px serif`;
+    ctx.fillStyle = 'rgba(255,215,0,0.80)';
+    ctx.fillText('→', mx + mw / 2, my + mh * 0.72 + arrowSize * 0.35);
+
     ctx.restore();
   }
 

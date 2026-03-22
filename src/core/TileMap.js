@@ -20,6 +20,9 @@
 export const COLS = 14;
 export const ROWS = 9;
 
+/** Column index of the service counter (right side of the cafe). */
+export const COUNTER_COL = 12;
+
 export const TILE = {
   WALL:    0,
   FLOOR:   1,

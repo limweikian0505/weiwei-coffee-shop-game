@@ -5,7 +5,7 @@
  */
 
 import { GameLoop }          from './GameLoop.js';
-import { TileMap, TILE }     from './TileMap.js';
+import { TileMap, TILE, COUNTER_COL } from './TileMap.js';
 import { Table }             from '../entities/Table.js';
 import { CustomerSystem }    from '../systems/CustomerSystem.js';
 import { OrderSystem }       from '../systems/OrderSystem.js';
@@ -191,7 +191,21 @@ class Game {
 
     ctx.clearRect(0, 0, W, H);
 
+    // Compute timestamp once per frame so all pulse animations
+    // stay in sync and Date.now() is only called once per frame.
+    const tileW    = this.tileMap ? this.tileMap.tileW : 64;
+    const tileH    = this.tileMap ? this.tileMap.tileH : 64;
+    const frameNow = Date.now();
+
     this.cafeRenderer.render(ctx, this.daySystem.getSkyTint());
+
+    // ── Counter service-zone hint ────────────────────────────────────────────
+    // When at least one customer is waiting for service, draw a soft animated
+    // glow around the counter tiles to guide the player's attention.
+    const hasWaiting = this.customerSystem.customers.some((c) => c.state === STATE.WAITING);
+    if (hasWaiting && this.tileMap) {
+      this._renderCounterHint(ctx, frameNow);
+    }
 
     // ── Depth-sorted rendering (painter's algorithm — back-to-front by Y) ──────
     const renderables = [
@@ -200,15 +214,9 @@ class Game {
     ];
     renderables.sort((a, b) => a.sortY - b.sortY);
 
-    // Compute timestamp once per frame so all waiting-customer pulse animations
-    // stay in sync and Date.now() is only called once regardless of crowd size.
-    const tileW = this.tileMap ? this.tileMap.tileW : 64;
-    const tileH = this.tileMap ? this.tileMap.tileH : 64;
-    const frameNow = Date.now();
-
     for (const r of renderables) {
       if (r.type === 'table') {
-        this.tableRenderer.render(ctx, r.obj, tileW, tileH);
+        this.tableRenderer.render(ctx, r.obj, tileW, tileH, frameNow);
       } else {
         this.customerRenderer.render(ctx, r.obj, W, H, tileW, tileH, frameNow);
         this.chatBubble.render(ctx, r.obj, W);
@@ -490,6 +498,45 @@ class Game {
   }
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
+
+  /**
+   * Draw a soft pulsing glow over the counter tiles to indicate to the player
+   * that one or more orders are ready to be prepared and served.
+   * Called only when `hasWaiting` is true.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} now - current timestamp in ms
+   */
+  _renderCounterHint(ctx, now) {
+    const tm = this.tileMap;
+    // Counter occupies rows 3–5 at COUNTER_COL (see BASE_LAYOUT in TileMap.js).
+    const rows = [3, 4, 5];
+
+    // Gentle pulse: 0.3–0.7 opacity, ~0.8 Hz
+    const pulse = 0.30 + 0.40 * (Math.sin(now * 0.005) * 0.5 + 0.5);
+
+    ctx.save();
+    ctx.globalAlpha = pulse;
+
+    for (const row of rows) {
+      const px = tm.originX + COUNTER_COL * tm.tileW;
+      const py = tm.originY + row * tm.tileH;
+
+      // Warm amber glow overlaid on counter tile
+      const grad = ctx.createRadialGradient(
+        px + tm.tileW / 2, py + tm.tileH / 2, 0,
+        px + tm.tileW / 2, py + tm.tileH / 2, tm.tileW * 0.85,
+      );
+      grad.addColorStop(0,   'rgba(255,210,80,0.65)');
+      grad.addColorStop(0.6, 'rgba(255,170,30,0.28)');
+      grad.addColorStop(1,   'rgba(255,150,0,0.00)');
+
+      ctx.fillStyle = grad;
+      ctx.fillRect(px, py, tm.tileW, tm.tileH);
+    }
+
+    ctx.restore();
+  }
 
   _resize() {
     const dpr  = window.devicePixelRatio || 1;

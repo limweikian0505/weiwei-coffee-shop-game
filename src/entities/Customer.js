@@ -329,15 +329,22 @@ export class Customer {
     this.say(msg, 2);
 
     if (this.tileMap) {
-      // Build a BFS tile path from the customer's current position back to the
-      // entrance tile, then continue to the off-screen exit world position.
-      const from     = this.tileMap.nearestWalkableTile(this.x, this.y);
-      const entrance = this.tileMap.getEntranceTile();
-      this.tilePath  = this.tileMap.findPath(from.tx, from.ty, entrance.tx, entrance.ty);
-      // After the tile path ends the customer walks directly to the exit.
-      const exitPos  = this.tileMap.getExitWorldPos();
-      this.targetX   = exitPos.x;
-      this.targetY   = exitPos.y;
+      // Alternate between exit rows 4 and 5 based on customer ID parity so
+      // multiple departing customers spread across both door tiles instead of
+      // queuing through a single row.  Parsing is guarded so any ID format
+      // that doesn't yield a positive integer still falls back sensibly.
+      const idNum  = parseInt(this.id.replace(/\D+/g, ''), 10) || 0;
+      const exitTy = 4 + (idNum % 2);
+
+      const from    = this.tileMap.nearestWalkableTile(this.x, this.y);
+      const exitTx  = this.tileMap.getEntranceTile().tx; // col 1
+      this.tilePath = this.tileMap.findPath(from.tx, from.ty, exitTx, exitTy);
+
+      // After the tile path ends the customer walks directly off-screen at
+      // the same row, so there is no sudden vertical snap at the door.
+      const exitWorld = this.tileMap.getExitWorldPos();
+      this.targetX    = exitWorld.x;
+      this.targetY    = this.tileMap.tileCenterY(exitTy);
     } else {
       // Fallback: move directly off the left edge.
       this.targetX = this.canvasWidth * -0.08;

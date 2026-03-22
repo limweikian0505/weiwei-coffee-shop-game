@@ -4,6 +4,12 @@
  *
  * Coordinates are used directly (no isometric Y-squash).
  * Animation selection is driven by customer.isMoving and customer.facing.
+ *
+ * Phase 4 additions:
+ *   - ORDERING state: pulsing ? bubble above sprite (customer is deciding).
+ *   - EATING state: small food-emoji badge so the player sees the table is served.
+ *   - Improved patience bar: wider track, stronger colour contrast.
+ *   - Tap-hint icon on WAITING customers for mobile discoverability.
  */
 
 import { roundRect as _roundRect } from '../utils/drawUtils.js';
@@ -96,9 +102,16 @@ export class CustomerRenderer {
     // ── Name tag (below sprite) ───────────────────────────────────────────────
     this._drawNameTag(ctx, sx, drawY + bodyH + 2, name, isStreamer, canvasW);
 
-    // ── Patience bar (shown while WAITING) ────────────────────────────────────
+    // ── State-specific overlays ───────────────────────────────────────────────
     if (state === 'WAITING') {
       this._drawWaitingIndicator(ctx, sx, drawY - 12, customer, canvasW, now);
+    } else if (state === 'ORDERING' || state === 'SEATED') {
+      // Customer is browsing the menu or deciding — show a gentle ? bubble so
+      // the player knows this is not yet an actionable table.
+      this._drawOrderingBubble(ctx, sx, drawY - 10, canvasW, now);
+    } else if (state === 'EATING') {
+      // Happy food badge — confirms to the player that the table has been served.
+      this._drawEatingBadge(ctx, sx + bodyW * 0.40, drawY, canvasW);
     }
 
     ctx.restore();
@@ -125,14 +138,16 @@ export class CustomerRenderer {
   }
 
   _drawWaitingIndicator(ctx, cx, cy, customer, canvasW, now = 0) {
-    const barW  = Math.max(38, canvasW * 0.068);
-    const barH  = 7;
+    // Phase 4: wider bar and stronger contrast for better readability on
+    // small mobile screens.
+    const barW  = Math.max(44, canvasW * 0.080);
+    const barH  = 8;
     const barX  = cx - barW / 2;
     const barY  = cy - 10;
     const ratio = Math.max(0, Math.min(1, customer.stateTimer / customer.patience));
 
     // Track (background)
-    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    ctx.fillStyle = 'rgba(0,0,0,0.32)';
     _roundRect(ctx, barX - 1, barY - 1, barW + 2, barH + 2, 4);
     ctx.fill();
 
@@ -141,9 +156,9 @@ export class CustomerRenderer {
     ctx.fill();
 
     let fillColor;
-    if (ratio > 0.5)       fillColor = '#66BB6A';
-    else if (ratio >= 0.3) fillColor = '#FFA726';
-    else                   fillColor = '#EF5350';
+    if (ratio > 0.5)       fillColor = '#43A047'; // green — plenty of time
+    else if (ratio >= 0.25) fillColor = '#FB8C00'; // orange — getting urgent
+    else                   fillColor = '#E53935'; // red — about to leave
 
     if (ratio > 0) {
       ctx.fillStyle = fillColor;
@@ -151,12 +166,81 @@ export class CustomerRenderer {
       ctx.fill();
     }
 
-    // Attention icon — pulsed red '!' above the bar
-    const pulse = (Math.sin(now * 0.008) * 0.5 + 0.5); // 0–1 oscillation
-    ctx.font      = `bold ${Math.round(14 + pulse * 3)}px 'Comic Sans MS', cursive`;
-    ctx.fillStyle = `rgba(255,${Math.round(40 + pulse * 40)},40,${0.85 + pulse * 0.15})`;
+    // Pulse the '!' icon — speed increases as patience runs low.
+    const urgency = 1 - ratio; // 0 = calm, 1 = critical
+    const freq    = 0.006 + urgency * 0.010; // oscillates faster when close to leaving
+    const pulse   = Math.sin(now * freq) * 0.5 + 0.5; // 0–1
+    const iconSize = Math.round(13 + pulse * 4 + urgency * 3);
+    ctx.font      = `bold ${iconSize}px 'Comic Sans MS', cursive`;
+    ctx.fillStyle = `rgba(255,${Math.round(30 + pulse * 30)},30,${0.85 + pulse * 0.15})`;
     ctx.textAlign = 'center';
-    ctx.fillText('!', cx, barY - 2);
+    ctx.fillText('!', cx, barY - 3);
+
+    // Tap hint (👆) on mobile so the player knows to tap the customer.
+    const tapSize = Math.max(11, canvasW * 0.028);
+    ctx.font      = `${tapSize}px serif`;
+    ctx.globalAlpha = 0.65 + pulse * 0.25;
+    ctx.fillText('👆', cx + barW * 0.50 + 4, barY + barH * 0.75);
+    ctx.globalAlpha = 1.0;
+  }
+
+  /**
+   * Gentle ? speech bubble shown while a customer is in ORDERING or SEATED
+   * state (browsing the menu).  It is deliberately muted so it doesn't
+   * compete with the urgent WAITING indicator.
+   */
+  _drawOrderingBubble(ctx, cx, cy, canvasW, now = 0) {
+    const pulse    = 0.6 + 0.4 * (Math.sin(now * 0.004) * 0.5 + 0.5);
+    const bubbleR  = Math.max(9, canvasW * 0.018);
+    const bx       = cx;
+    const by       = cy - bubbleR * 0.5;
+
+    ctx.save();
+    ctx.globalAlpha = pulse * 0.80;
+
+    // Bubble background
+    ctx.fillStyle   = 'rgba(255,255,255,0.90)';
+    ctx.strokeStyle = '#B8A070';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath();
+    ctx.arc(bx, by, bubbleR, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+
+    // Tail
+    ctx.beginPath();
+    ctx.moveTo(bx - bubbleR * 0.3, by + bubbleR * 0.7);
+    ctx.lineTo(bx - bubbleR * 0.7, by + bubbleR * 1.4);
+    ctx.lineTo(bx + bubbleR * 0.1, by + bubbleR * 0.85);
+    ctx.fillStyle = 'rgba(255,255,255,0.90)';
+    ctx.fill();
+
+    // ? glyph
+    const qSize = Math.max(8, bubbleR * 1.1);
+    ctx.font        = `bold ${qSize}px 'Comic Sans MS', cursive`;
+    ctx.fillStyle   = '#7A5020';
+    ctx.textAlign   = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('?', bx, by);
+    ctx.textBaseline = 'alphabetic';
+
+    ctx.restore();
+  }
+
+  /**
+   * Small food emoji badge shown beside a customer who is eating, confirming
+   * that this table has already been served.
+   */
+  _drawEatingBadge(ctx, cx, cy, canvasW) {
+    const size = Math.max(11, canvasW * 0.026);
+    ctx.save();
+    ctx.font         = `${size}px serif`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.globalAlpha  = 0.85;
+    ctx.fillText('🍰', cx, cy);
+    ctx.textBaseline = 'alphabetic';
+    ctx.restore();
   }
 
   _drawSparkles(ctx, cx, cy, timer, radius) {
