@@ -1,268 +1,286 @@
 /**
- * TableRenderer.js — Isometric 2.5D Style
+ * TableRenderer.js — True Top-Down Style
  *
- * Draws tables as isometric 3D objects.
+ * Draws tables as flat, bird's-eye shapes aligned with the top-down tile grid.
+ * Coordinates are used directly without any isometric projection or Y-squish.
  *
- * Coordinate transform (perspective squish):
- *   sx = table.x            (keep X as-is — game coords are already screen pixels)
- *   sy = table.y * 0.55 + H * 0.22  (squish Y upward to simulate depth)
+ * Table and chair sizes are derived from the tile dimensions passed by Game.js
+ * so they scale consistently across different screen sizes.
+ *
+ * Chair positions follow table.seats offsets exactly, ensuring visual and
+ * logical positions match (customers always walk to where the chair is drawn).
+ *
+ * Phase 4 additions:
+ *   - Attention ring + coffee-cup icon when any customer is WAITING for service.
+ *   - Subtle "eating" tint on the table surface when customers are being served.
+ *   - Occupied chairs rendered in a warmer, more distinct tone.
  *
  * Supported types:
- *   'round2'  — isometric round table with 2 chair cushions
- *   'square4' — isometric square table (parallelogram top) with 4 chairs
- *   'long6'   — elongated locked table (Phase 2)
+ *   'round2'  — circular table with 2 chair circles (left & right)
+ *   'square4' — rectangular table with 4 chair squares (N, S, W, E)
+ *   'long6'   — elongated locked table (placeholder outline)
  */
 
 export class TableRenderer {
   /**
    * @param {CanvasRenderingContext2D} ctx
    * @param {Table}  table
-   * @param {number} [canvasH=640]
+   * @param {number} [tileW=64]  - tile width in CSS pixels
+   * @param {number} [tileH=64]  - tile height in CSS pixels
+   * @param {number} [now=0]     - current timestamp in ms (for pulsed animations)
    */
-  render(ctx, table, canvasH = 640) {
+  render(ctx, table, tileW = 64, tileH = 64, now = 0) {
+    // Use world coordinates directly — no isometric projection.
     const sx = table.x;
-    const sy = table.y * 0.55 + canvasH * 0.22;
+    const sy = table.y;
 
     switch (table.type) {
       case 'round2':
-        this._drawRound2(ctx, table, sx, sy, canvasH);
+        this._drawRound2(ctx, table, sx, sy, tileW, tileH, now);
         break;
       case 'square4':
-        this._drawSquare4(ctx, table, sx, sy, canvasH);
+        this._drawSquare4(ctx, table, sx, sy, tileW, tileH, now);
         break;
       case 'long6':
-        this._drawLong6(ctx, table, sx, sy);
+        this._drawLong6(ctx, table, sx, sy, tileW, tileH);
         break;
       default:
-        this._drawRound2(ctx, table, sx, sy, canvasH);
+        this._drawRound2(ctx, table, sx, sy, tileW, tileH, now);
     }
   }
 
-  // ─── round2 ──────────────────────────────────────────────────────────────────
+  // ─── Helpers ────────────────────────────────────────────────────────────────
 
-  _drawRound2(ctx, table, sx, sy, canvasH) {
-    const r    = Math.max(22, canvasH * 0.038);    // table top radius
-    const legH = r * 0.55;                          // leg height
-    const sideH = r * 0.28;                         // cylinder side depth
+  /**
+   * Derive the service state of a table from its seated customers.
+   * Returns: 'empty' | 'occupied' | 'waiting' | 'eating'
+   */
+  _tableServiceState(table) {
+    const hasSeat = (state) => table.seats.some((s) => s.customer && s.customer.state === state);
+    if (hasSeat('WAITING'))                         return 'waiting';
+    if (hasSeat('EATING') || hasSeat('PAYING'))     return 'eating';
+    if (table.seats.some((s) => s.occupied))        return 'occupied';
+    return 'empty';
+  }
+
+  // ─── round2 ─────────────────────────────────────────────────────────────────
+
+  _drawRound2(ctx, table, sx, sy, tileW, tileH, now) {
+    const tileMin = Math.min(tileW, tileH);
+    const r       = tileMin * 0.36; // table radius ~36% of tile
+    const chairR  = tileMin * 0.20; // chair radius ~20% of tile
+    const svcState = this._tableServiceState(table);
 
     ctx.save();
 
-    // ── Chairs (draw before table so table is on top) ──────────────────────────
+    // ── Pre-table attention ring (WAITING state) ───────────────────────────────
+    if (svcState === 'waiting') {
+      this._drawAttentionRing(ctx, sx, sy, r, now);
+    }
+
+    // ── Chairs (drawn before table so table top is on top) ─────────────────────
     for (const seat of table.seats) {
-      const cx = sx + seat.ox * 0.82;
-      const cy = sy + seat.oy * 0.42;
-      this._drawChairCushion(ctx, cx, cy, seat.occupied, r * 0.48, sideH * 0.7);
+      const cx = sx + seat.ox;
+      const cy = sy + seat.oy;
+      this._drawChair(ctx, cx, cy, seat.occupied, chairR);
     }
 
-    // ── Table legs ────────────────────────────────────────────────────────────
-    ctx.strokeStyle = '#5C4A1E';
-    ctx.lineWidth   = Math.max(2, r * 0.12);
-    for (const dx of [-r * 0.45, r * 0.45]) {
-      ctx.beginPath();
-      ctx.moveTo(sx + dx, sy + sideH);
-      ctx.lineTo(sx + dx, sy + sideH + legH);
-      ctx.stroke();
-    }
-
-    // ── Table cylinder side ───────────────────────────────────────────────────
-    ctx.fillStyle   = '#6B4F1A';
-    ctx.strokeStyle = '#3D2B08';
-    ctx.lineWidth   = 2;
+    // ── Drop shadow ────────────────────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
     ctx.beginPath();
-    ctx.ellipse(sx, sy + sideH, r, r * 0.38, 0, 0, Math.PI);
-    ctx.closePath();
+    ctx.ellipse(sx + 3, sy + 3, r, r, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Table surface ──────────────────────────────────────────────────────────
+    // Tint occupied tables slightly warmer so empty vs occupied is instantly legible.
+    const baseColor = svcState === 'empty' ? '#A0722A' : '#B07E36';
+    ctx.fillStyle   = baseColor;
+    ctx.strokeStyle = '#5C3A10';
+    ctx.lineWidth   = 2.5;
+    ctx.beginPath();
+    ctx.arc(sx, sy, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // ── Table top (ellipse) ────────────────────────────────────────────────────
-    ctx.fillStyle   = '#8B6914';
-    ctx.strokeStyle = '#5C4A1E';
-    ctx.lineWidth   = 3;
-    ctx.beginPath();
-    ctx.ellipse(sx, sy, r, r * 0.42, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-
-    // Wood grain
-    ctx.strokeStyle = 'rgba(255,220,120,0.28)';
+    // Wood grain ring
+    ctx.strokeStyle = 'rgba(255,220,120,0.30)';
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
-    ctx.ellipse(sx - r * 0.18, sy - r * 0.06, r * 0.52, r * 0.22, -0.3, 0.1, 1.2);
+    ctx.arc(sx, sy, r * 0.60, 0, Math.PI * 2);
     ctx.stroke();
+
+    // Centre highlight dot
+    ctx.fillStyle = 'rgba(255,240,180,0.25)';
+    ctx.beginPath();
+    ctx.arc(sx, sy, r * 0.22, 0, Math.PI * 2);
+    ctx.fill();
+
+    // ── Post-table overlay icons ───────────────────────────────────────────────
+    if (svcState === 'waiting') {
+      this._drawOrderReadyIcon(ctx, sx, sy - r * 0.20, r, now);
+    } else if (svcState === 'eating') {
+      this._drawEatingIcon(ctx, sx, sy, r);
+    }
 
     ctx.restore();
   }
 
-  _drawChairCushion(ctx, cx, cy, occupied, rW, rH) {
+  /** Top-down circular chair cushion. */
+  _drawChair(ctx, cx, cy, occupied, r) {
     ctx.save();
 
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
     ctx.beginPath();
-    ctx.ellipse(cx, cy + rH + 3, rW * 0.75, rH * 0.55, 0, 0, Math.PI * 2);
+    ctx.arc(cx + 2, cy + 2, r, 0, Math.PI * 2);
     ctx.fill();
 
-    // Cushion side
-    ctx.fillStyle   = occupied ? '#C8A860' : '#E8D08A';
-    ctx.strokeStyle = '#B8943A';
+    // Cushion — occupied chairs are a warmer, more saturated amber so the
+    // player can immediately see at a glance that a seat is taken.
+    ctx.fillStyle   = occupied ? '#D4902A' : '#F0DC9A';
+    ctx.strokeStyle = occupied ? '#7A4A10' : '#B8943A';
     ctx.lineWidth   = 1.5;
     ctx.beginPath();
-    ctx.ellipse(cx, cy + rH, rW, rH, 0, 0, Math.PI);
-    ctx.closePath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
     ctx.fill();
     ctx.stroke();
 
-    // Cushion top
-    ctx.fillStyle   = occupied ? '#D4B46A' : '#F0DC9A';
-    ctx.strokeStyle = '#B8943A';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.ellipse(cx, cy, rW, rH, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
+    // Seat detail ring (only on empty chairs so occupied ones read as flat/solid)
+    if (!occupied) {
+      ctx.strokeStyle = 'rgba(180,140,60,0.35)';
+      ctx.lineWidth   = 1;
+      ctx.beginPath();
+      ctx.arc(cx, cy, r * 0.55, 0, Math.PI * 2);
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
 
-  // ─── square4 ─────────────────────────────────────────────────────────────────
+  // ─── square4 ────────────────────────────────────────────────────────────────
 
-  _drawSquare4(ctx, table, sx, sy, canvasH) {
-    const hw   = Math.max(26, canvasH * 0.042);  // half width
-    const hd   = hw * 0.42;                       // half depth (isometric squish)
-    const legH = hw * 0.50;
-    const topH = hd * 0.35;                       // thickness of table top
+  _drawSquare4(ctx, table, sx, sy, tileW, tileH, now) {
+    const tileMin  = Math.min(tileW, tileH);
+    const hw       = tileMin * 0.33; // half-width of table surface
+    const chairR   = tileMin * 0.20;
+    const svcState = this._tableServiceState(table);
 
     ctx.save();
 
-    // ── Chairs at N/S/E/W ─────────────────────────────────────────────────────
-    const chairDefs = [
-      { ox: 0,    oy: -hw * 1.45 },  // North
-      { ox: 0,    oy:  hw * 1.45 },  // South
-      { ox: -hw * 1.45, oy: 0   },  // West
-      { ox:  hw * 1.45, oy: 0   },  // East
-    ];
-    for (let i = 0; i < chairDefs.length; i++) {
-      const occ = i < table.seats.length && table.seats[i].occupied;
-      const cx  = sx + chairDefs[i].ox * 0.82;
-      const cy  = sy + chairDefs[i].oy * 0.42;
-      this._drawIsoChair(ctx, cx, cy, occ, hw * 0.42, hd * 0.5);
+    // ── Pre-table attention ring ───────────────────────────────────────────────
+    if (svcState === 'waiting') {
+      this._drawAttentionRing(ctx, sx, sy, hw * 1.1, now);
     }
 
-    // ── Legs ──────────────────────────────────────────────────────────────────
-    ctx.strokeStyle = '#5C4A1E';
-    ctx.lineWidth   = Math.max(2, hw * 0.12);
-    for (const [dx, dy] of [[-hw * 0.75, -hd * 0.5], [hw * 0.75, -hd * 0.5],
-                             [-hw * 0.75,  hd * 0.5], [hw * 0.75,  hd * 0.5]]) {
-      ctx.beginPath();
-      ctx.moveTo(sx + dx, sy + dy + topH);
-      ctx.lineTo(sx + dx, sy + dy + topH + legH);
-      ctx.stroke();
+    // ── Chairs at seat positions ───────────────────────────────────────────────
+    for (const seat of table.seats) {
+      this._drawChair(ctx, sx + seat.ox, sy + seat.oy, seat.occupied, chairR);
     }
 
-    // ── Table front face ──────────────────────────────────────────────────────
-    ctx.fillStyle   = '#6B4F1A';
-    ctx.strokeStyle = '#3D2B08';
-    ctx.lineWidth   = 2;
-    ctx.beginPath();
-    ctx.moveTo(sx - hw, sy + hd);
-    ctx.lineTo(sx + hw, sy + hd);
-    ctx.lineTo(sx + hw, sy + hd + topH);
-    ctx.lineTo(sx - hw, sy + hd + topH);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    // ── Drop shadow ────────────────────────────────────────────────────────────
+    ctx.fillStyle = 'rgba(0,0,0,0.15)';
+    ctx.fillRect(sx - hw + 3, sy - hw + 3, hw * 2, hw * 2);
 
-    // ── Table right face ──────────────────────────────────────────────────────
-    ctx.fillStyle = '#5A3F10';
-    ctx.beginPath();
-    ctx.moveTo(sx + hw, sy);
-    ctx.lineTo(sx + hw, sy + hd);
-    ctx.lineTo(sx + hw, sy + hd + topH);
-    ctx.lineTo(sx + hw, sy + topH);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // ── Table top (parallelogram) ─────────────────────────────────────────────
-    ctx.fillStyle   = '#8B6914';
-    ctx.strokeStyle = '#5C4A1E';
+    // ── Table surface ──────────────────────────────────────────────────────────
+    const baseColor = svcState === 'empty' ? '#A0722A' : '#B07E36';
+    ctx.fillStyle   = baseColor;
+    ctx.strokeStyle = '#5C3A10';
     ctx.lineWidth   = 2.5;
-    ctx.beginPath();
-    ctx.moveTo(sx,      sy - hd);   // back center
-    ctx.lineTo(sx + hw, sy);        // right
-    ctx.lineTo(sx,      sy + hd);   // front center
-    ctx.lineTo(sx - hw, sy);        // left
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
+    ctx.fillRect(sx - hw, sy - hw, hw * 2, hw * 2);
+    ctx.strokeRect(sx - hw, sy - hw, hw * 2, hw * 2);
 
     // Wood grain lines
     ctx.strokeStyle = 'rgba(255,220,120,0.28)';
     ctx.lineWidth   = 1.2;
-    for (const t of [0.3, 0.5, 0.7]) {
+    for (const t of [0.35, 0.65]) {
       ctx.beginPath();
-      ctx.moveTo(sx - hw * (1 - t * 0.5), sy - hd * (1 - t));
-      ctx.lineTo(sx + hw * (1 - t * 0.5), sy - hd * (1 - t));
+      ctx.moveTo(sx - hw, sy - hw + hw * 2 * t);
+      ctx.lineTo(sx + hw, sy - hw + hw * 2 * t);
       ctx.stroke();
+    }
+
+    // ── Post-table overlay icons ───────────────────────────────────────────────
+    if (svcState === 'waiting') {
+      this._drawOrderReadyIcon(ctx, sx, sy, hw, now);
+    } else if (svcState === 'eating') {
+      this._drawEatingIcon(ctx, sx, sy, hw * 0.9);
     }
 
     ctx.restore();
   }
 
-  _drawIsoChair(ctx, cx, cy, occupied, hw, hd) {
-    ctx.save();
+  // ─── long6 (locked — placeholder) ───────────────────────────────────────────
 
-    // Shadow
-    ctx.fillStyle = 'rgba(0,0,0,0.12)';
-    ctx.beginPath();
-    ctx.ellipse(cx, cy + hd + 2, hw * 0.7, hd * 0.55, 0, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Chair front
-    ctx.fillStyle   = occupied ? '#C8A860' : '#E8C97A';
-    ctx.strokeStyle = '#B8943A';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(cx - hw, cy + hd * 0.5);
-    ctx.lineTo(cx + hw, cy + hd * 0.5);
-    ctx.lineTo(cx + hw, cy + hd);
-    ctx.lineTo(cx - hw, cy + hd);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    // Chair top (parallelogram)
-    ctx.fillStyle   = occupied ? '#D4B46A' : '#F0DC9A';
-    ctx.strokeStyle = '#B8943A';
-    ctx.lineWidth   = 1.5;
-    ctx.beginPath();
-    ctx.moveTo(cx,      cy - hd * 0.5);
-    ctx.lineTo(cx + hw, cy);
-    ctx.lineTo(cx,      cy + hd * 0.5);
-    ctx.lineTo(cx - hw, cy);
-    ctx.closePath();
-    ctx.fill();
-    ctx.stroke();
-
-    ctx.restore();
-  }
-
-  // ─── long6 (locked — Phase 2) ─────────────────────────────────────────────
-
-  _drawLong6(ctx, table, sx, sy) {
+  _drawLong6(ctx, table, sx, sy, tileW, tileH, now = 0) {
+    const lw = tileW * 1.9;
+    const lh = tileH * 0.65;
     ctx.save();
     ctx.setLineDash([6, 4]);
     ctx.strokeStyle = '#999';
     ctx.lineWidth   = 3;
-    ctx.strokeRect(sx - 62, sy - 22, 124, 44);
+    ctx.strokeRect(sx - lw / 2, sy - lh / 2, lw, lh);
     ctx.restore();
 
     ctx.fillStyle = 'rgba(150,150,150,0.15)';
-    ctx.fillRect(sx - 62, sy - 22, 124, 44);
+    ctx.fillRect(sx - lw / 2, sy - lh / 2, lw, lh);
 
     ctx.font      = "bold 13px 'Comic Sans MS', cursive";
     ctx.fillStyle = '#888';
     ctx.textAlign = 'center';
     ctx.fillText('🔒 解锁', sx, sy + 6);
   }
+
+  // ─── State overlay helpers ───────────────────────────────────────────────────
+
+  /**
+   * Pulsing orange/red ring drawn beneath the table to signal that a
+   * customer is waiting for service.  Pulse speed: ~1 Hz.
+   */
+  _drawAttentionRing(ctx, cx, cy, radius, now) {
+    // Pulse: oscillates between 0.4 and 1.0 opacity at ~1 Hz.
+    const pulse  = 0.4 + 0.6 * (Math.sin(now * 0.006) * 0.5 + 0.5);
+    const expand = 1.0 + 0.12 * (Math.sin(now * 0.006) * 0.5 + 0.5);
+
+    ctx.save();
+    ctx.strokeStyle = `rgba(255,100,30,${(pulse * 0.75).toFixed(2)})`;
+    ctx.lineWidth   = 3;
+    ctx.beginPath();
+    ctx.arc(cx, cy, radius * expand * 1.25, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /**
+   * Small coffee-cup icon drawn on top of the table surface when a customer
+   * is in the WAITING state, reinforcing that their order still needs to be
+   * served.
+   */
+  _drawOrderReadyIcon(ctx, cx, cy, tableRadius, now) {
+    const pulse    = 0.7 + 0.3 * (Math.sin(now * 0.007) * 0.5 + 0.5);
+    const iconSize = Math.max(10, tableRadius * 0.55);
+
+    ctx.save();
+    ctx.globalAlpha = pulse;
+    ctx.font        = `${iconSize}px serif`;
+    ctx.textAlign   = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('☕', cx, cy);
+    ctx.restore();
+  }
+
+  /**
+   * Small happy-food icon on the table surface while customers are eating,
+   * confirming to the player that this table has been served.
+   */
+  _drawEatingIcon(ctx, cx, cy, tableRadius) {
+    const iconSize = Math.max(8, tableRadius * 0.45);
+    ctx.save();
+    ctx.globalAlpha = 0.80;
+    ctx.font        = `${iconSize}px serif`;
+    ctx.textAlign   = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🍰', cx, cy);
+    ctx.restore();
+  }
 }
+
