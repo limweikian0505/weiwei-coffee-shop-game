@@ -32,7 +32,7 @@ export class CustomerRenderer {
     this._loaded = true;
   }
 
-  render(ctx, customer, canvasW = 360, canvasH = 640) {
+  render(ctx, customer, canvasW = 360, canvasH = 640, tileW = 64, tileH = 64, now = 0) {
     // Top-down: use world coordinates directly, no isometric Y projection.
     const sx = customer.x;
     const sy = customer.y;
@@ -42,9 +42,11 @@ export class CustomerRenderer {
       facing, isMoving,
     } = customer;
 
-    // Scale sprite to fill roughly one tile.  The formula targets ~12% of canvas
-    // height which on a typical phone (667 px) gives ~80 px — close to one tile.
-    const bodyW = Math.max(52, Math.min(canvasW * 0.14, canvasH * 0.12));
+    // Scale sprite so it fits neatly inside one tile (88 % of the smaller
+    // tile dimension).  This keeps characters correctly proportioned across
+    // all screen sizes without exceeding their tile footprint.
+    const tileMin = Math.min(tileW, tileH);
+    const bodyW = Math.max(32, tileMin * 0.88);
     const bodyH = bodyW;
 
     // Sprite is drawn centred on the world position (top-down convention: the
@@ -96,7 +98,7 @@ export class CustomerRenderer {
 
     // ── Patience bar (shown while WAITING) ────────────────────────────────────
     if (state === 'WAITING') {
-      this._drawWaitingIndicator(ctx, sx, drawY - 12, customer, canvasW);
+      this._drawWaitingIndicator(ctx, sx, drawY - 12, customer, canvasW, now);
     }
 
     ctx.restore();
@@ -122,12 +124,17 @@ export class CustomerRenderer {
     ctx.fillText(name, cx, cy + fontSize);
   }
 
-  _drawWaitingIndicator(ctx, cx, cy, customer, canvasW) {
-    const barW  = Math.max(36, canvasW * 0.065);
-    const barH  = 6;
+  _drawWaitingIndicator(ctx, cx, cy, customer, canvasW, now = 0) {
+    const barW  = Math.max(38, canvasW * 0.068);
+    const barH  = 7;
     const barX  = cx - barW / 2;
-    const barY  = cy - 11;
+    const barY  = cy - 10;
     const ratio = Math.max(0, Math.min(1, customer.stateTimer / customer.patience));
+
+    // Track (background)
+    ctx.fillStyle = 'rgba(0,0,0,0.22)';
+    _roundRect(ctx, barX - 1, barY - 1, barW + 2, barH + 2, 4);
+    ctx.fill();
 
     ctx.fillStyle = '#FFCCCC';
     _roundRect(ctx, barX, barY, barW, barH, 3);
@@ -144,10 +151,12 @@ export class CustomerRenderer {
       ctx.fill();
     }
 
-    ctx.font      = "bold 15px 'Comic Sans MS', cursive";
-    ctx.fillStyle = '#FF4444';
+    // Attention icon — pulsed red '!' above the bar
+    const pulse = (Math.sin(now * 0.008) * 0.5 + 0.5); // 0–1 oscillation
+    ctx.font      = `bold ${Math.round(14 + pulse * 3)}px 'Comic Sans MS', cursive`;
+    ctx.fillStyle = `rgba(255,${Math.round(40 + pulse * 40)},40,${0.85 + pulse * 0.15})`;
     ctx.textAlign = 'center';
-    ctx.fillText('!', cx, barY - 1);
+    ctx.fillText('!', cx, barY - 2);
   }
 
   _drawSparkles(ctx, cx, cy, timer, radius) {

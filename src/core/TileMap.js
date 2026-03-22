@@ -212,7 +212,11 @@ export class TileMap {
 
   /**
    * Find the nearest walkable tile to the given world position.
-   * Searches in expanding rings up to distance 4.
+   * Searches in expanding rings up to distance 4, checking cardinal
+   * neighbours (N/E/S/W) before diagonal ones at each ring level so that
+   * the result is axis-aligned whenever possible.  This avoids diagonally-
+   * offset approach tiles that produce unnecessarily long customer paths.
+   *
    * Falls back to the entrance tile when no walkable tile is found nearby.
    *
    * @param {number} wx
@@ -223,10 +227,26 @@ export class TileMap {
     const { tx: baseTx, ty: baseTy } = this.worldToTile(wx, wy);
 
     for (let d = 0; d <= 4; d++) {
+      // d === 0 : check the tile that contains the world position itself.
+      if (d === 0) {
+        if (this.isWalkable(baseTx, baseTy)) return { tx: baseTx, ty: baseTy };
+        continue;
+      }
+
+      // Cardinal neighbours at Manhattan distance d (N → E → S → W).
+      // These are preferred over diagonal cells at the same ring distance.
+      for (const [dx, dy] of [[0, -d], [d, 0], [0, d], [-d, 0]]) {
+        if (this.isWalkable(baseTx + dx, baseTy + dy)) {
+          return { tx: baseTx + dx, ty: baseTy + dy };
+        }
+      }
+
+      // Non-cardinal cells of the Chebyshev ring at distance d
+      // (corners and mixed-axis cells checked after all cardinals).
       for (let dy = -d; dy <= d; dy++) {
         for (let dx = -d; dx <= d; dx++) {
-          // Only check the border ring (skip inner tiles already checked).
-          if (d > 0 && Math.abs(dx) !== d && Math.abs(dy) !== d) continue;
+          if (dx === 0 || dy === 0) continue;                   // cardinals already handled
+          if (Math.abs(dx) !== d && Math.abs(dy) !== d) continue; // inner cells
           if (this.isWalkable(baseTx + dx, baseTy + dy)) {
             return { tx: baseTx + dx, ty: baseTy + dy };
           }

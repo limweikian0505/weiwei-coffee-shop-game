@@ -200,15 +200,17 @@ class Game {
     ];
     renderables.sort((a, b) => a.sortY - b.sortY);
 
+    // Compute timestamp once per frame so all waiting-customer pulse animations
+    // stay in sync and Date.now() is only called once regardless of crowd size.
+    const tileW = this.tileMap ? this.tileMap.tileW : 64;
+    const tileH = this.tileMap ? this.tileMap.tileH : 64;
+    const frameNow = Date.now();
+
     for (const r of renderables) {
       if (r.type === 'table') {
-        this.tableRenderer.render(
-          ctx, r.obj,
-          this.tileMap ? this.tileMap.tileW : 64,
-          this.tileMap ? this.tileMap.tileH : 64,
-        );
+        this.tableRenderer.render(ctx, r.obj, tileW, tileH);
       } else {
-        this.customerRenderer.render(ctx, r.obj, W, H);
+        this.customerRenderer.render(ctx, r.obj, W, H, tileW, tileH, frameNow);
         this.chatBubble.render(ctx, r.obj, W);
       }
     }

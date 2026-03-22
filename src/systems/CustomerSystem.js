@@ -135,11 +135,6 @@ export class CustomerSystem {
     const table = this.tables.find((t) => t.isAvailableForGroup(groupId, groupSize));
     if (!table) return; // no room
 
-    // Compute the tile approach position for this table (used for all group members).
-    const approachTile = this.tileMap
-      ? this.tileMap.nearestWalkableTile(table.x, table.y)
-      : null;
-
     // Build group members
     const newCustomers = [];
 
@@ -200,26 +195,35 @@ export class CustomerSystem {
       }
 
       // ── Position and tile path ─────────────────────────────────────────────
-      if (this.tileMap && approachTile) {
-        // Spawn just off the left edge at the entrance row.
-        const spawnPos = this.tileMap.getSpawnWorldPos();
-        customer.x = spawnPos.x;
-        // Stagger Y slightly for group members so they don't overlap.
-        customer.y = spawnPos.y + i * Math.max(20, this.tileMap.tileH * 0.35);
+      if (this.tileMap) {
+        // Alternate entrance rows 4 and 5 (both are DOOR tiles) so group
+        // members spread out rather than all funnelling through the same tile.
+        const entranceTx = this.tileMap.getEntranceTile().tx;
+        const entranceTy = 4 + (i % 2);
+
+        // Spawn just off the left edge at the chosen entrance row.
+        customer.x = this.tileMap.getSpawnWorldPos().x;
+        customer.y = this.tileMap.tileCenterY(entranceTy);
 
         // Inject the TileMap so the customer can build its own leave path later.
         customer.tileMap = this.tileMap;
 
-        // BFS path from entrance tile to the tile nearest the table.
-        const entrance = this.tileMap.getEntranceTile();
+        // Walk directly to the customer's assigned seat tile so each group
+        // member heads to a distinct destination right from the entrance —
+        // no shared "approach tile" that causes multiple customers to stack.
+        const seatTile = this.tileMap.nearestWalkableTile(
+          table.seatX(seatIdx),
+          table.seatY(seatIdx),
+        );
         customer.tilePath = this.tileMap.findPath(
-          entrance.tx, entrance.ty,
-          approachTile.tx, approachTile.ty,
+          entranceTx, entranceTy,
+          seatTile.tx, seatTile.ty,
         );
 
-        // targetX/Y = approach tile centre (where the path ends).
-        customer.targetX = this.tileMap.tileCenterX(approachTile.tx);
-        customer.targetY = this.tileMap.tileCenterY(approachTile.ty);
+        // targetX/Y = seat-tile centre; FINDING_TABLE will fine-tune to the
+        // exact sub-tile seat position after the 1-second "menu browsing" delay.
+        customer.targetX = this.tileMap.tileCenterX(seatTile.tx);
+        customer.targetY = this.tileMap.tileCenterY(seatTile.ty);
       } else {
         // Fallback (no TileMap): original pixel-based positioning.
         customer.x       = this.canvasW * -0.05;
