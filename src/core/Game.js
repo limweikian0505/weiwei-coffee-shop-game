@@ -5,6 +5,7 @@
  */
 
 import { GameLoop }          from './GameLoop.js';
+import { TileMap, TILE, COUNTER_COL } from './TileMap.js';
 import { Table }             from '../entities/Table.js';
 import { CustomerSystem }    from '../systems/CustomerSystem.js';
 import { OrderSystem }       from '../systems/OrderSystem.js';
@@ -45,17 +46,29 @@ class Game {
     const W = this.W;
     const H = this.H;
 
-    this.tables = [
-      new Table(1, W * 0.30, H * 0.58, 'round2'),
-      new Table(2, W * 0.55, H * 0.62, 'square4'),
+    // ── Tile map (top-down grid foundation) ───────────────────────────────────
+    this.tileMap = new TileMap(W, H);
+
+    // Table tile positions — stored so _resize() can recompute pixel coords.
+    // Layout: two starting tables with clear aisles between them and the counter.
+    this._tableTiles = [
+      { tx: 3, ty: 3 }, // upper-left area
+      { tx: 9, ty: 3 }, // upper-right area (col 9 gives a clear corridor to counter)
     ];
+    this.tables = this._tableTiles.map((tile, idx) => {
+      const pos  = this.tileMap.tileToWorld(tile.tx, tile.ty);
+      const type = idx === 0 ? 'round2' : 'square4';
+      return new Table(idx + 1, pos.x, pos.y, type, this.tileMap.tileW, this.tileMap.tileH);
+    });
+    // Mark table tiles as impassable so customers path around furniture.
+    this._markTableTiles();
 
     this.economySystem    = new EconomySystem();
     this.orderSystem      = new OrderSystem();
     this.reputationSystem = new ReputationSystem();
     this.daySystem        = new DaySystem();
     this.goalSystem       = new GoalSystem();
-    this.customerSystem   = new CustomerSystem(this.tables, H, W);
+    this.customerSystem   = new CustomerSystem(this.tables, H, W, this.tileMap);
 
     this.upgradeShop = new UpgradeShop();
     this.daySummary  = new DaySummary();
@@ -83,7 +96,7 @@ class Game {
 
     this.upgradeShop.onBuy = (upgradeId) => this._applyUpgrade(upgradeId);
 
-    this.cafeRenderer     = new CafeRenderer(W, H);
+    this.cafeRenderer     = new CafeRenderer(W, H, this.tileMap);
     this.tableRenderer    = new TableRenderer();
     this.customerRenderer = new CustomerRenderer();
     this.chatBubble       = new ChatBubble();
@@ -178,9 +191,23 @@ class Game {
 
     ctx.clearRect(0, 0, W, H);
 
+    // Compute timestamp once per frame so all pulse animations
+    // stay in sync and Date.now() is only called once per frame.
+    const tileW    = this.tileMap ? this.tileMap.tileW : 64;
+    const tileH    = this.tileMap ? this.tileMap.tileH : 64;
+    const frameNow = Date.now();
+
     this.cafeRenderer.render(ctx, this.daySystem.getSkyTint());
 
-    // ── Depth-sorted rendering (painter's algorithm for isometric view) ────────
+    // ── Counter service-zone hint ────────────────────────────────────────────
+    // When at least one customer is waiting for service, draw a soft animated
+    // glow around the counter tiles to guide the player's attention.
+    const hasWaiting = this.customerSystem.customers.some((c) => c.state === STATE.WAITING);
+    if (hasWaiting && this.tileMap) {
+      this._renderCounterHint(ctx, frameNow);
+    }
+
+    // ── Depth-sorted rendering (painter's algorithm — back-to-front by Y) ──────
     const renderables = [
       ...this.tables.map((t) => ({ type: 'table', obj: t, sortY: t.y })),
       ...this.customerSystem.customers.map((c) => ({ type: 'customer', obj: c, sortY: c.y })),
@@ -189,9 +216,9 @@ class Game {
 
     for (const r of renderables) {
       if (r.type === 'table') {
-        this.tableRenderer.render(ctx, r.obj, H);
+        this.tableRenderer.render(ctx, r.obj, tileW, tileH, frameNow);
       } else {
-        this.customerRenderer.render(ctx, r.obj, W, H);
+        this.customerRenderer.render(ctx, r.obj, W, H, tileW, tileH, frameNow);
         this.chatBubble.render(ctx, r.obj, W);
       }
     }
@@ -406,17 +433,35 @@ class Game {
     SaveSystem.save(this);
   }
 
+  /** Mark every placed table's tile as TILE.TABLE so BFS pathfinding avoids it. */
+  _markTableTiles() {
+    if (!this.tileMap) return;
+    for (const tile of this._tableTiles) {
+      if (tile) this.tileMap.setTile(tile.tx, tile.ty, TILE.TABLE);
+    }
+  }
+
   _addTable() {
-    const W = this.W;
-    const H = this.H;
-    const n = this.tables.length;
-    const positions = [
-      [W * 0.42, H * 0.48],
-      [W * 0.68, H * 0.50],
+    const tableCount = this.tables.length;
+    // Pre-defined tile positions for additional tables.
+    // Lower-area positions mirror the upper starting tables for a balanced layout.
+    const extraTiles = [
+      { tx: 3, ty: 6 }, // lower-left area
+      { tx: 9, ty: 6 }, // lower-right area
     ];
-    const pos = positions[n - 2] ?? [W * 0.50 + n * 30, H * 0.52];
-    this.tables.push(new Table(n + 1, pos[0], pos[1], 'square4'));
+    const tile = extraTiles[tableCount - 2] ?? { tx: 5 + (tableCount - 4) * 3, ty: 5 };
+    this._tableTiles.push(tile);
+
+    const pos = this.tileMap
+      ? this.tileMap.tileToWorld(tile.tx, tile.ty)
+      : { x: this.W * 0.50, y: this.H * 0.52 };
+
+    this.tables.push(new Table(
+      tableCount + 1, pos.x, pos.y, 'square4',
+      this.tileMap?.tileW ?? 64, this.tileMap?.tileH ?? 64,
+    ));
     this.customerSystem.tables = this.tables;
+    this._markTableTiles();
   }
 
   _showDaySummary() {
@@ -454,6 +499,45 @@ class Game {
 
   // ─── Private helpers ─────────────────────────────────────────────────────────
 
+  /**
+   * Draw a soft pulsing glow over the counter tiles to indicate to the player
+   * that one or more orders are ready to be prepared and served.
+   * Called only when `hasWaiting` is true.
+   *
+   * @param {CanvasRenderingContext2D} ctx
+   * @param {number} now - current timestamp in ms
+   */
+  _renderCounterHint(ctx, now) {
+    const tm = this.tileMap;
+    // Counter occupies rows 3–5 at COUNTER_COL (see BASE_LAYOUT in TileMap.js).
+    const rows = [3, 4, 5];
+
+    // Gentle pulse: 0.3–0.7 opacity, ~0.8 Hz
+    const pulse = 0.30 + 0.40 * (Math.sin(now * 0.005) * 0.5 + 0.5);
+
+    ctx.save();
+    ctx.globalAlpha = pulse;
+
+    for (const row of rows) {
+      const px = tm.originX + COUNTER_COL * tm.tileW;
+      const py = tm.originY + row * tm.tileH;
+
+      // Warm amber glow overlaid on counter tile
+      const grad = ctx.createRadialGradient(
+        px + tm.tileW / 2, py + tm.tileH / 2, 0,
+        px + tm.tileW / 2, py + tm.tileH / 2, tm.tileW * 0.85,
+      );
+      grad.addColorStop(0,   'rgba(255,210,80,0.65)');
+      grad.addColorStop(0.6, 'rgba(255,170,30,0.28)');
+      grad.addColorStop(1,   'rgba(255,150,0,0.00)');
+
+      ctx.fillStyle = grad;
+      ctx.fillRect(px, py, tm.tileW, tm.tileH);
+    }
+
+    ctx.restore();
+  }
+
   _resize() {
     const dpr  = window.devicePixelRatio || 1;
     const cssW = window.innerWidth;
@@ -480,16 +564,24 @@ class Game {
       this.cafeRenderer.w = cssW;
       this.cafeRenderer.h = cssH;
     }
+    if (this.tileMap) {
+      this.tileMap.resize(cssW, cssH);
+    }
     if (this.customerSystem) {
       this.customerSystem.canvasW = cssW;
       this.customerSystem.canvasH = cssH;
     }
-    // Reposition tables so they follow the new layout on orientation change
-    if (this.tables && this.tables.length >= 2) {
-      this.tables[0].x = cssW * 0.30;
-      this.tables[0].y = cssH * 0.58;
-      this.tables[1].x = cssW * 0.55;
-      this.tables[1].y = cssH * 0.62;
+    // Reposition tables to their tile-based pixel positions on the updated grid.
+    // Rebuild seat offsets to match the new tile dimensions.
+    if (this.tileMap && this.tables && this._tableTiles) {
+      for (let i = 0; i < this.tables.length; i++) {
+        const tile = this._tableTiles[i];
+        if (!tile) continue;
+        const pos = this.tileMap.tileToWorld(tile.tx, tile.ty);
+        this.tables[i].x = pos.x;
+        this.tables[i].y = pos.y;
+        this.tables[i].rebuildSeats(this.tileMap.tileW, this.tileMap.tileH);
+      }
     }
   }
 

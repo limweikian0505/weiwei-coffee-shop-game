@@ -11,6 +11,11 @@
  *  - Max 8 customers on screen at once
  *  - If no table has enough room for the group, no one enters
  *  - spawnEnabled = false prevents new spawns (e.g. CLOSING phase)
+ *
+ * Tile-based movement (Phase 1):
+ *  - Each spawned customer receives a TileMap reference and a BFS tile path
+ *    from the entrance tile to the tile nearest their assigned table.
+ *  - The off-screen entry/exit positions are derived from TileMap helpers.
  */
 
 import { Customer, STATE } from '../entities/Customer.js';
@@ -22,18 +27,23 @@ import {
 
 export class CustomerSystem {
   /**
-   * @param {Table[]}  tables  - Array of Table instances
-   * @param {number}   canvasH - Canvas height (for spawn Y range)
-   * @param {number}   canvasW - Canvas width (for exit target calculation)
+   * @param {Table[]}   tables   - Array of Table instances
+   * @param {number}    canvasH  - Canvas height (CSS pixels)
+   * @param {number}    [canvasW=1280] - Canvas width (CSS pixels)
+   * @param {TileMap|null} [tileMap=null] - TileMap for tile-based movement
    */
-  constructor(tables, canvasH, canvasW = 1280) {
-    this.tables       = tables;
-    this.canvasH      = canvasH;
-    this.canvasW      = canvasW;
-    this.customers    = [];
-    this._spawnTimer  = 4; // first customer arrives after 4 s
-    this._spawnDelay  = 8 + Math.random() * 4;
-    this._groupSeq    = 0; // counter for unique group IDs
+  constructor(tables, canvasH, canvasW = 1280, tileMap = null) {
+    this.tables      = tables;
+    this.canvasH     = canvasH;
+    this.canvasW     = canvasW;
+    this.tileMap     = tileMap;
+    this.customers   = [];
+    this._spawnTimer = 4; // first customer arrives after 4 s
+    this._spawnDelay = 8 + Math.random() * 4;
+    this._groupSeq   = 0; // counter for unique group IDs
+    // Alternates between entrance rows 4 and 5 for solo customers so that
+    // consecutive single arrivals don't all funnel through the same door tile.
+    this._entranceToggle = false;
 
     /** Set false to block new spawns (e.g. CLOSING / SUMMARY phase). */
     this.spawnEnabled = true;
@@ -112,7 +122,7 @@ export class CustomerSystem {
     if (this.customers.length >= 8) return;
 
     // Decide if this is a streamer or special customer (always single)
-    const typeRoll = Math.random();
+    const typeRoll   = Math.random();
     const isStreamer = typeRoll < 0.10;
     const isSpecial  = !isStreamer && typeRoll < 0.15;
 
@@ -187,11 +197,53 @@ export class CustomerSystem {
         customer = this._makeCustomer({ name, color, emoji: '😊', groupId });
       }
 
-      // Spawn position: off the left edge near the entrance door, stagger Y slightly for group members
-      customer.x       = this.canvasW * -0.05;
-      customer.y       = this.canvasH * 0.54 + i * 28;
-      customer.targetX  = table.x - 80;
-      customer.targetY  = table.y;
+      // ── Position and tile path ─────────────────────────────────────────────
+      if (this.tileMap) {
+        // For solo customers, alternate entrance rows 4 and 5 so consecutive
+        // arrivals don't all funnel through the same door tile.
+        // For group members (i > 0), offset by member index so they spread out
+        // naturally without stacking on one tile.
+        const entranceTx = this.tileMap.getEntranceTile().tx;
+        let entranceTy;
+        if (groupSize === 1) {
+          // Solo customer — toggle the entrance row each spawn.
+          entranceTy = this._entranceToggle ? 5 : 4;
+          this._entranceToggle = !this._entranceToggle;
+        } else {
+          // Group member — spread by index (leader on row 4, follower on row 5).
+          entranceTy = 4 + (i % 2);
+        }
+
+        // Spawn just off the left edge at the chosen entrance row.
+        customer.x = this.tileMap.getSpawnWorldPos().x;
+        customer.y = this.tileMap.tileCenterY(entranceTy);
+
+        // Inject the TileMap so the customer can build its own leave path later.
+        customer.tileMap = this.tileMap;
+
+        // Walk directly to the customer's assigned seat tile so each group
+        // member heads to a distinct destination right from the entrance —
+        // no shared "approach tile" that causes multiple customers to stack.
+        const seatTile = this.tileMap.nearestWalkableTile(
+          table.seatX(seatIdx),
+          table.seatY(seatIdx),
+        );
+        customer.tilePath = this.tileMap.findPath(
+          entranceTx, entranceTy,
+          seatTile.tx, seatTile.ty,
+        );
+
+        // targetX/Y = seat-tile centre; FINDING_TABLE will fine-tune to the
+        // exact sub-tile seat position after the 1-second "menu browsing" delay.
+        customer.targetX = this.tileMap.tileCenterX(seatTile.tx);
+        customer.targetY = this.tileMap.tileCenterY(seatTile.ty);
+      } else {
+        // Fallback (no TileMap): original pixel-based positioning.
+        customer.x       = this.canvasW * -0.05;
+        customer.y       = this.canvasH * 0.54 + i * 28;
+        customer.targetX = table.x - 80;
+        customer.targetY = table.y;
+      }
 
       table.occupy(seatIdx, customer);
       customer.assignedTable = table;
@@ -212,7 +264,7 @@ export class CustomerSystem {
    * Returns special customer types that are eligible to spawn given current conditions.
    */
   _getEligibleSpecials() {
-    const rep = this.currentReputation;
+    const rep          = this.currentReputation;
     const cakeUnlocked = MENU_ITEMS.find((m) => m.id === 'cake')?.unlocked ?? false;
 
     return SPECIAL_CUSTOMERS.filter((data) => {
